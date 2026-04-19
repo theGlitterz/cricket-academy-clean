@@ -34,16 +34,16 @@ jobs:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: pnpm drizzle-kit migrate
 
-      - name: Seed database
+           - name: Seed database
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
-          JWT_SECRET: temp-secret
-          ADMIN_EMAIL: admin@example.com
-          ADMIN_PASSWORD: Password123
-          CLOUDINARY_CLOUD_NAME: temp
-          CLOUDINARY_API_KEY: temp
-          CLOUDINARY_API_SECRET: temp
+          JWT_SECRET: ${{ secrets.JWT_SECRET }}
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+          CLOUDINARY_CLOUD_NAME: ${{ secrets.CLOUDINARY_CLOUD_NAME }}
+          CLOUDINARY_API_KEY: ${{ secrets.CLOUDINARY_API_KEY }}
+          CLOUDINARY_API_SECRET: ${{ secrets.CLOUDINARY_API_SECRET }}
         run: npx tsx server/seed.ts
       - name: Verify seeded data
         run: |
