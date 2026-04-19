@@ -45,3 +45,15 @@ jobs:
           CLOUDINARY_API_KEY: temp
           CLOUDINARY_API_SECRET: temp
         run: npx tsx server/seed.ts
+      - name: Verify seeded data
+        run: |
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+          psql "$DATABASE_URL_UNPOOLED" -c "select current_database();"
+          psql "$DATABASE_URL_UNPOOLED" -c "select count(*) as facilities from facilities;"
+          psql "$DATABASE_URL_UNPOOLED" -c "select count(*) as services from services;"
+          psql "$DATABASE_URL_UNPOOLED" -c "select count(*) as slots from slots;"
+          psql "$DATABASE_URL_UNPOOLED" -c "select count(*) as bookings from bookings;"
+          psql "$DATABASE_URL_UNPOOLED" -c "select count(*) as users from users;"
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
