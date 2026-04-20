@@ -249,7 +249,7 @@ async function seed() {
         email: adminEmail,
         passwordHash,
         name: "Super Admin",
-        role: "super_admin",
+        role: "admin",
         facilityId: null,
       });
       console.log(`✅ Created super_admin user: ${adminEmail}`);
