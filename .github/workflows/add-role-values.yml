@@ -1,35 +1,48 @@
-name: Add new role values
+name: Fix users role enum
 
 on:
   workflow_dispatch:
 
 jobs:
-  update-role:
+  fix-role:
     runs-on: ubuntu-latest
 
     steps:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Add enum values
+      - name: Convert users.role to new enum
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: |
           psql "$DATABASE_URL_UNPOOLED" << 'EOF'
 
-          ALTER TYPE role ADD VALUE IF NOT EXISTS 'super_admin';
-          ALTER TYPE role ADD VALUE IF NOT EXISTS 'facility_admin';
+          DO $$
+          BEGIN
+            IF NOT EXISTS (
+              SELECT 1
+              FROM pg_type
+              WHERE typname = 'role'
+            ) THEN
+              CREATE TYPE role AS ENUM ('super_admin', 'facility_admin');
+            END IF;
+          END $$;
 
-          UPDATE users
-          SET role = 'super_admin'
-          WHERE email = '${{ secrets.ADMIN_EMAIL }}';
+          ALTER TABLE users
+          ALTER COLUMN role TYPE role
+          USING (
+            CASE
+              WHEN role::text = 'admin' THEN 'super_admin'
+              ELSE 'facility_admin'
+            END
+          )::role;
+
+          DROP TYPE IF EXISTS role_old;
 
           EOF
 
-      - name: verify
+      - name: Verify result
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: |
-          psql "$DATABASE_URL_UNPOOLED" -c "
-          select email, role from users;
-          "
+          psql "$DATABASE_URL_UNPOOLED" -c "select email, role from users;"
