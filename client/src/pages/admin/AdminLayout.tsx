@@ -11,15 +11,17 @@ import {
   LayoutDashboard,
   CalendarDays,
   Clock,
+  Layers,
   Settings,
   LogOut,
   Menu,
   X,
   ExternalLink,
   Loader2,
-   ShieldAlert,
+  ShieldAlert,
   ShieldCheck,
 } from "lucide-react";
+
 
 import { Button } from "@/components/ui/button";
 
@@ -28,8 +30,10 @@ const BASE_NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
   { href: "/admin/slots", label: "Slots", icon: Clock },
+  { href: "/admin/services", label: "Services", icon: Layers },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
+
 
 const SUPER_ADMIN_NAV = { href: "/admin/super", label: "Platform", icon: ShieldCheck };
 
