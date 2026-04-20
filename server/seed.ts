@@ -5,6 +5,7 @@
 import { getDb } from "./db";
 import { facilities, services, slots, bookings } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
+import bcrypt from "bcryptjs";
 
 const DEFAULT_SERVICES = [
   {
@@ -224,7 +225,39 @@ async function seed() {
     console.log("⏭️  Bookings already exist, skipping demo booking seed");
   }
 
+  // ── 5. Seed admin user ────────────────────────────────────────────────────
+  const adminEmail = process.env.ADMIN_EMAIL;
+  const adminPassword = process.env.ADMIN_PASSWORD;
+
+  if (!adminEmail || !adminPassword) {
+    console.warn(
+      "⚠️  ADMIN_EMAIL or ADMIN_PASSWORD not set — skipping admin user seed.\n" +
+      "   Set both env vars and re-run to create the super_admin account."
+    );
+  } else {
+    const existingAdmin = await db
+      .select({ id: users.id })
+      .from(users)
+      .where(eq(users.email, adminEmail))
+      .limit(1);
+
+    if (existingAdmin.length > 0) {
+      console.log(`⏭️  Admin user already exists: ${adminEmail}`);
+    } else {
+      const passwordHash = await bcrypt.hash(adminPassword, 10);
+      await db.insert(users).values({
+        email: adminEmail,
+        passwordHash,
+        name: "Super Admin",
+        role: "super_admin",
+        facilityId: null,
+      });
+      console.log(`✅ Created super_admin user: ${adminEmail}`);
+    }
+  }
+
   console.log("🎉 Seed complete!");
+
   process.exit(0);
 }
 
