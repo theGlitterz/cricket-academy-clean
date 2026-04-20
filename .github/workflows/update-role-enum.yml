@@ -1,0 +1,43 @@
+name: Update role enum
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate-role:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Update enum safely
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          psql "$DATABASE_URL_UNPOOLED" << 'EOF'
+
+          ALTER TYPE role RENAME TO role_old;
+
+          CREATE TYPE role AS ENUM ('super_admin','facility_admin');
+
+          ALTER TABLE users
+          ALTER COLUMN role TYPE role
+          USING (
+            CASE
+              WHEN role_old = 'admin' THEN 'super_admin'
+              ELSE 'facility_admin'
+            END
+          )::role;
+
+          DROP TYPE role_old;
+
+          EOF
+
+      - name: verify
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          psql "$DATABASE_URL_UNPOOLED" -c "
+          select email, role from users;
+          "
