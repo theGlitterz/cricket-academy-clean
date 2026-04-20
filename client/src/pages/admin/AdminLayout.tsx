@@ -17,17 +17,22 @@ import {
   X,
   ExternalLink,
   Loader2,
-  ShieldAlert,
+   ShieldAlert,
+  ShieldCheck,
 } from "lucide-react";
+
 import { Button } from "@/components/ui/button";
 
 // ─── Nav Items ────────────────────────────────────────────────────────────────
-const NAV_ITEMS = [
+const BASE_NAV_ITEMS = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/admin/bookings", label: "Bookings", icon: CalendarDays },
   { href: "/admin/slots", label: "Slots", icon: Clock },
   { href: "/admin/settings", label: "Settings", icon: Settings },
 ];
+
+const SUPER_ADMIN_NAV = { href: "/admin/super", label: "Platform", icon: ShieldCheck };
+
 
 // ─── Sidebar background color ─────────────────────────────────────────────────
 const SIDEBAR_BG = "oklch(0.20 0.08 145)";
@@ -103,6 +108,9 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   }
 
   // ── Admin shell ──
+  const NAV_ITEMS = user?.role === "super_admin"
+  ? [...BASE_NAV_ITEMS, SUPER_ADMIN_NAV]
+  : BASE_NAV_ITEMS;
   const currentNav = NAV_ITEMS.find((n) => n.href === location);
 
   return (
