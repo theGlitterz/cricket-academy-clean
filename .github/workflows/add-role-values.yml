@@ -11,38 +11,34 @@ jobs:
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
 
-      - name: Convert users.role to new enum
+      - name: Fix role enum and promote admin
         env:
           DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
         run: |
           psql "$DATABASE_URL_UNPOOLED" << 'EOF'
 
-          DO $$
-          BEGIN
-            IF NOT EXISTS (
-              SELECT 1
-              FROM pg_type
-              WHERE typname = 'role'
-            ) THEN
-              CREATE TYPE role AS ENUM ('super_admin', 'facility_admin');
-            END IF;
-          END $$;
+          ALTER TABLE users
+          ALTER COLUMN role DROP DEFAULT;
 
           ALTER TABLE users
           ALTER COLUMN role TYPE role
           USING (
             CASE
               WHEN role::text = 'admin' THEN 'super_admin'
-              ELSE 'facility_admin'
+              WHEN role::text = 'user' THEN 'facility_admin'
+              ELSE role::text
             END
           )::role;
 
+          ALTER TABLE users
+          ALTER COLUMN role SET DEFAULT 'facility_admin'::role;
+
+          UPDATE users
+          SET role = 'super_admin'
+          WHERE email = 'theglitterz1@gmail.com';
+
           DROP TYPE IF EXISTS role_old;
 
-          EOF
+          SELECT email, role FROM users;
 
-      - name: Verify result
-        env:
-          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
-        run: |
-          psql "$DATABASE_URL_UNPOOLED" -c "select email, role from users;"
+          EOF
