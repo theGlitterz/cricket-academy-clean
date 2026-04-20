@@ -17,6 +17,7 @@ import AdminBookings from "./pages/admin/AdminBookings";
 import AdminBookingDetail from "./pages/admin/AdminBookingDetail";
 import AdminSlots from "./pages/admin/AdminSlots";
 import AdminSettings from "./pages/admin/AdminSettings";
+import SuperAdmin from "./pages/admin/SuperAdmin";
 
 function Router() {
   return (
@@ -35,6 +36,8 @@ function Router() {
       <Route path="/admin/bookings/:id" component={AdminBookingDetail} />
       <Route path="/admin/slots" component={AdminSlots} />
       <Route path="/admin/settings" component={AdminSettings} />
+      <Route path="/admin/super" component={SuperAdmin} />
+
 
       {/* Fallback */}
       <Route path="/404" component={NotFound} />
