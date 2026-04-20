@@ -1,0 +1,30 @@
+name: Promote user to super_admin
+
+on:
+  workflow_dispatch:
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Promote admin user
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          psql "$DATABASE_URL_UNPOOLED" -c "
+          update users
+          set role = 'super_admin'
+          where email = '${{ secrets.ADMIN_EMAIL }}';
+          "
+
+      - name: verify
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          psql "$DATABASE_URL_UNPOOLED" -c "
+          select email, role from users;
+          "
