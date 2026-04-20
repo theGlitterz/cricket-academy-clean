@@ -85,8 +85,8 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
     );
   }
 
-  // ── Not admin ──
-  if (user?.role !== "admin") {
+  // ── Not admin or super admin ──
+  if (user?.role !== "admin" && user?.role !== "super_admin") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-4 bg-background">
         <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center">
