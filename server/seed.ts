@@ -3,7 +3,7 @@
  * Usage: npx tsx server/seed.ts
  */
 import { getDb } from "./db";
-import { facilities, services, slots, bookings } from "../drizzle/schema";
+import { facilities, services, slots, bookings, users } from "../drizzle/schema";
 import { eq } from "drizzle-orm";
 import bcrypt from "bcryptjs";
 
