@@ -1,0 +1,35 @@
+name: Add new role values
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-role:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Add enum values
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          psql "$DATABASE_URL_UNPOOLED" << 'EOF'
+
+          ALTER TYPE role ADD VALUE IF NOT EXISTS 'super_admin';
+          ALTER TYPE role ADD VALUE IF NOT EXISTS 'facility_admin';
+
+          UPDATE users
+          SET role = 'super_admin'
+          WHERE email = '${{ secrets.ADMIN_EMAIL }}';
+
+          EOF
+
+      - name: verify
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          psql "$DATABASE_URL_UNPOOLED" -c "
+          select email, role from users;
+          "
