@@ -577,3 +577,37 @@ export async function cancelBooking(
   // Free up the slot
   await markSlotAvailable(booking.slotId);
 }
+// ─── Facility helpers ─────────────────────────────────────────────────────────
+
+export async function createFacility(input: {
+  facilityName: string;
+  coachName?: string;
+  coachWhatsApp?: string;
+  address?: string;
+}): Promise<number> {
+  const [row] = await db
+    .insert(facilities)
+    .values({
+      facilityName: input.facilityName,
+      coachName: input.coachName ?? null,
+      coachWhatsApp: input.coachWhatsApp ?? null,
+      address: input.address ?? null,
+    })
+    .returning({ id: facilities.id });
+  return row.id;
+}
+
+export async function createFacilityAdmin(input: {
+  email: string;
+  passwordHash: string;
+  name: string;
+  facilityId: number;
+}): Promise<void> {
+  await db.insert(users).values({
+    email: input.email,
+    passwordHash: input.passwordHash,
+    name: input.name,
+    role: "facility_admin",
+    facilityId: input.facilityId,
+  });
+}
