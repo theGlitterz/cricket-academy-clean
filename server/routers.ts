@@ -52,9 +52,9 @@ import {
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
-  if (ctx.user.role !== "admin") {
-    throw new TRPCError({ code: "FORBIDDEN", message: "Admin access required" });
-  }
+ if (!ctx.user || (ctx.user.role !== "admin" && ctx.user.role !== "super_admin")) {
+  throw new TRPCError({ code: "UNAUTHORIZED" });
+}
   return next({ ctx });
 });
 
