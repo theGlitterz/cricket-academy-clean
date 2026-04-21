@@ -20,7 +20,14 @@ import { notifyOwner } from "./_core/notification";
 import { storagePut } from "./storage";
 import { signSession, verifySession } from "./_core/sdk";
 import { ENV } from "./_core/env";
-import { getUserByEmail, createUser, touchUserSignIn } from "./db";
+import {
+  getUserByEmail,
+  createUser,
+  touchUserSignIn,
+  createFacility,
+  createFacilityAdmin,
+  getAllFacilities,
+} from "./db";
 import bcrypt from "bcryptjs";
 import {
   FACILITY_ID,
