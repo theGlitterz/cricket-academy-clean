@@ -57,6 +57,12 @@ const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
 }
   return next({ ctx });
 });
+const superAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
+  if (!ctx.user || ctx.user.role !== "super_admin") {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
+  return next({ ctx });
+});
 
 // ─── Auth router ──────────────────────────────────────────────────────────────
 
