@@ -91,64 +91,73 @@ const authRouter = router({
         password: z.string().min(1, "Password is required"),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+        .mutation(async ({ input, ctx }) => {
       const adminEmail = ENV.adminEmail;
       const adminPassword = ENV.adminPassword;
+      const emailLower = input.email.toLowerCase();
 
-      if (!adminEmail || !adminPassword) {
-        throw new TRPCError({
-          code: "INTERNAL_SERVER_ERROR",
-          message: "Admin credentials not configured on this server.",
+      // ── Try DB user first (facility_admin and super_admin created via UI) ──
+      const dbUser = await getUserByEmail(emailLower);
+      if (dbUser && dbUser.passwordHash) {
+        // Only allow admin roles to log in here
+        if (dbUser.role !== "super_admin" && dbUser.role !== "facility_admin" && dbUser.role !== "admin") {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+        }
+        const passwordValid = await bcrypt.compare(input.password, dbUser.passwordHash);
+        if (!passwordValid) {
+          throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+        }
+        // Sign JWT and set cookie
+        const token = await signSession({
+          userId: dbUser.id,
+          email: dbUser.email,
+          role: dbUser.role,
         });
+        const cookieOptions = getSessionCookieOptions(ctx.req);
+        ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
+        touchUserSignIn(dbUser.id).catch(() => {});
+        return { ok: true, user: { id: dbUser.id, email: dbUser.email, name: dbUser.name, role: dbUser.role } };
       }
 
-      // Case-insensitive email check
-      if (input.email.toLowerCase() !== adminEmail.toLowerCase()) {
+      // ── Fallback: env-based super admin (for first-time setup before seed) ──
+      if (!adminEmail || !adminPassword) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
       }
-
-      // Password check — supports plain text (dev) and bcrypt hash (prod)
+      if (emailLower !== adminEmail.toLowerCase()) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+      }
       let passwordValid = false;
       if (adminPassword.startsWith("$2")) {
         passwordValid = await bcrypt.compare(input.password, adminPassword);
       } else {
         passwordValid = input.password === adminPassword;
       }
-
       if (!passwordValid) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
       }
-
-      // Ensure admin user record exists in DB
-      let user = await getUserByEmail(input.email.toLowerCase());
+      // Ensure super_admin user record exists in DB
+      let user = await getUserByEmail(emailLower);
       if (!user) {
         const hash = await bcrypt.hash(input.password, 10);
         await createUser({
-          email: input.email.toLowerCase(),
+          email: emailLower,
           passwordHash: hash,
           name: "Admin",
-          role: "admin",
+          role: "super_admin",
         });
-        user = await getUserByEmail(input.email.toLowerCase());
+        user = await getUserByEmail(emailLower);
       }
-
       if (!user) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user record" });
       }
-
-      // Sign JWT and set cookie
       const token = await signSession({
         userId: user.id,
         email: user.email,
         role: user.role,
       });
-
       const cookieOptions = getSessionCookieOptions(ctx.req);
       ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-
-      // Update last signed in
       touchUserSignIn(user.id).catch(() => {});
-
       return { ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
     }),
 
