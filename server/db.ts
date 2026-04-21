@@ -579,12 +579,23 @@ export async function cancelBooking(
 }
 // ─── Facility helpers ─────────────────────────────────────────────────────────
 
+// ─── Facility helpers ─────────────────────────────────────────────────────────
+
+export async function getAllFacilities(): Promise<Facility[]> {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(facilities).orderBy(facilities.id);
+}
+
 export async function createFacility(input: {
   facilityName: string;
   coachName?: string;
   coachWhatsApp?: string;
   address?: string;
 }): Promise<number> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
   const [row] = await db
     .insert(facilities)
     .values({
@@ -594,6 +605,7 @@ export async function createFacility(input: {
       address: input.address ?? null,
     })
     .returning({ id: facilities.id });
+
   return row.id;
 }
 
@@ -603,6 +615,9 @@ export async function createFacilityAdmin(input: {
   name: string;
   facilityId: number;
 }): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
   await db.insert(users).values({
     email: input.email,
     passwordHash: input.passwordHash,
