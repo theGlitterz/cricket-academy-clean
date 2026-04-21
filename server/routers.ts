@@ -618,8 +618,6 @@ const superAdminRouter = router({
 });
 
 export const appRouter = router({
-
-export const appRouter = router({
   system: systemRouter,
   auth: authRouter,
   facility: facilityRouter,
