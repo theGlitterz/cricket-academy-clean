@@ -608,6 +608,58 @@ export async function createFacility(input: {
 
   return row.id;
 }
+/** super_admin only: delete a facility — blocked if linked data exists */
+export async function deleteFacility(id: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  // Block deletion of the primary facility (id=1)
+  if (id === 1) {
+    throw new Error("Cannot delete the primary facility.");
+  }
+
+  // Check for linked services
+  const linkedServices = await db
+    .select({ id: services.id })
+    .from(services)
+    .where(eq(services.facilityId, id))
+    .limit(1);
+  if (linkedServices.length > 0) {
+    throw new Error("Cannot delete: this facility has services. Delete the services first.");
+  }
+
+  // Check for linked slots
+  const linkedSlots = await db
+    .select({ id: slots.id })
+    .from(slots)
+    .where(eq(slots.facilityId, id))
+    .limit(1);
+  if (linkedSlots.length > 0) {
+    throw new Error("Cannot delete: this facility has slots. Delete the slots first.");
+  }
+
+  // Check for linked bookings
+  const linkedBookings = await db
+    .select({ id: bookings.id })
+    .from(bookings)
+    .where(eq(bookings.facilityId, id))
+    .limit(1);
+  if (linkedBookings.length > 0) {
+    throw new Error("Cannot delete: this facility has bookings.");
+  }
+
+  // Check for linked facility_admin users
+  const linkedUsers = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.facilityId, id))
+    .limit(1);
+  if (linkedUsers.length > 0) {
+    throw new Error("Cannot delete: this facility has admin users assigned. Remove them first.");
+  }
+
+  await db.delete(facilities).where(eq(facilities.id, id));
+}
 
 export async function createFacilityAdmin(input: {
   email: string;
