@@ -591,6 +591,33 @@ const bookingsRouter = router({
 });
 
 // ─── App router ───────────────────────────────────────────────────────────────
+const superAdminRouter = router({
+  createFacilityAdmin: superAdminProcedure
+    .input(
+      z.object({
+        email: z.string().email(),
+        name: z.string().min(1),
+        password: z.string().min(8),
+        facilityId: z.number().int(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const existing = await getUserByEmail(input.email.toLowerCase());
+      if (existing) {
+        throw new TRPCError({ code: "CONFLICT", message: "A user with this email already exists" });
+      }
+      const hash = await bcrypt.hash(input.password, 10);
+      await createFacilityAdmin({
+        email: input.email.toLowerCase(),
+        passwordHash: hash,
+        name: input.name,
+        facilityId: input.facilityId,
+      });
+      return { success: true };
+    }),
+});
+
+export const appRouter = router({
 
 export const appRouter = router({
   system: systemRouter,
@@ -599,6 +626,8 @@ export const appRouter = router({
   services: servicesRouter,
   slots: slotsRouter,
   bookings: bookingsRouter,
+  superAdmin: superAdminRouter,
+
 });
 
 export type AppRouter = typeof appRouter;
