@@ -54,6 +54,7 @@ import {
   upsertService,
   getAllSlotsForDate,
   deleteSlot,
+  deleteFacility,
 } from "./db";
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
@@ -233,6 +234,13 @@ const facilityRouter = router({
     .mutation(async ({ input }) => {
       const id = await createFacility(input);
       return { id };
+    }),
+  /** super_admin only: delete a facility — blocked if it has linked data */
+  delete: superAdminProcedure
+    .input(z.object({ id: z.number().int() }))
+    .mutation(async ({ input }) => {
+      await deleteFacility(input.id);
+      return { success: true };
     }),
 
 });
