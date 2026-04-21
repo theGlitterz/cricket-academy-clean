@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import {
   Building2, UserPlus, ShieldAlert, Loader2,
-  CheckCircle2, AlertCircle, ChevronDown, ChevronUp,
+  CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Trash2, X,
 } from "lucide-react";
 
 function CreateFacilityForm({ onCreated }: { onCreated: () => void }) {
@@ -188,16 +188,57 @@ function CreateFacilityAdminForm({ facilities }: { facilities: { id: number; fac
   );
 }
 
-function FacilityList({ facilities, loading }: {
+function FacilityList({
+  facilities,
+  loading,
+  onDeleted,
+}: {
   facilities: { id: number; facilityName: string; coachName: string | null; address: string | null; isActive: boolean }[];
   loading: boolean;
+  onDeleted: () => void;
 }) {
-  if (loading) return <div className="flex items-center justify-center py-8"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>;
-  if (facilities.length === 0) return <p className="text-sm text-muted-foreground py-4 text-center">No facilities yet. Create one above.</p>;
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const deleteFacility = trpc.facility.delete.useMutation({
+    onSuccess: () => {
+      setDeletingId(null);
+      onDeleted();
+    },
+    onError: (err) => {
+      setDeletingId(null);
+      setDeleteError(err.message);
+    },
+  });
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+  if (facilities.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground py-4 text-center">No facilities yet. Create one above.</p>
+    );
+  }
   return (
     <div className="space-y-2">
+      {deleteError && (
+        <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 text-red-700 text-sm mb-2">
+          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+          <span>{deleteError}</span>
+          <button onClick={() => setDeleteError(null)} className="ml-auto text-red-400 hover:text-red-600">
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
       {facilities.map((f) => (
-        <div key={f.id} className="flex items-start justify-between p-3 rounded-xl border border-border bg-card">
+        <div
+          key={f.id}
+          className="flex items-start justify-between p-3 rounded-xl border border-border bg-card"
+        >
           <div>
             <div className="flex items-center gap-2">
               <span className="font-semibold text-sm text-foreground">{f.facilityName}</span>
@@ -208,12 +249,34 @@ function FacilityList({ facilities, loading }: {
             {f.coachName && <p className="text-xs text-muted-foreground mt-0.5">{f.coachName}</p>}
             {f.address && <p className="text-xs text-muted-foreground">{f.address}</p>}
           </div>
-          <span className="text-xs font-mono text-muted-foreground shrink-0 ml-3">ID: {f.id}</span>
+          <div className="flex items-center gap-2 shrink-0 ml-3">
+            <span className="text-xs font-mono text-muted-foreground">ID: {f.id}</span>
+            {f.id !== 1 && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-red-500 hover:text-red-700 hover:border-red-300 px-2"
+                disabled={deletingId === f.id}
+                onClick={() => {
+                  if (window.confirm(`Delete "${f.facilityName}"? This cannot be undone.`)) {
+                    setDeletingId(f.id);
+                    setDeleteError(null);
+                    deleteFacility.mutate({ id: f.id });
+                  }
+                }}
+              >
+                {deletingId === f.id
+                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  : <Trash2 className="w-3.5 h-3.5" />}
+              </Button>
+            )}
+          </div>
         </div>
       ))}
     </div>
   );
 }
+
 
 export default function SuperAdmin() {
   const { user } = useAuth();
@@ -249,7 +312,7 @@ export default function SuperAdmin() {
             <CardDescription>{facilities.length} facilit{facilities.length === 1 ? "y" : "ies"} registered</CardDescription>
           </CardHeader>
           <CardContent>
-            <FacilityList facilities={facilities} loading={isLoading} />
+          <FacilityList facilities={facilities} loading={isLoading} onDeleted={handleFacilityCreated} />
           </CardContent>
         </Card>
         <CreateFacilityForm onCreated={handleFacilityCreated} />
