@@ -193,6 +193,26 @@ const facilityRouter = router({
       await upsertFacility({ upiQrImageUrl: url });
       return { url };
     }),
+    /** super_admin only: list all facilities */
+  listAll: superAdminProcedure.query(async () => {
+    return getAllFacilities();
+  }),
+
+  /** super_admin only: create a new facility */
+  create: superAdminProcedure
+    .input(
+      z.object({
+        facilityName: z.string().min(1),
+        coachName: z.string().optional(),
+        coachWhatsApp: z.string().optional(),
+        address: z.string().optional(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const id = await createFacility(input);
+      return { id };
+    }),
+
 });
 
 // ─── Services router ──────────────────────────────────────────────────────────
