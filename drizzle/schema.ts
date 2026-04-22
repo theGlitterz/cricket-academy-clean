@@ -103,8 +103,11 @@ export const services = pgTable("services", {
   durationMinutes: integer("duration_minutes").notNull().default(60),
   /** Price per slot in INR */
   price: decimal("price", { precision: 10, scale: 2 }).notNull(),
+  /** Advance/token amount required to confirm booking (must be ≤ price) */
+  advanceAmount: decimal("advance_amount", { precision: 10, scale: 2 }).notNull().default("0"),
   /** Whether this service is available for booking */
   activeStatus: boolean("active_status").notNull().default(true),
+
   /** Display order on the booking page */
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
