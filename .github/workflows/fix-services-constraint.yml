@@ -1,0 +1,35 @@
+name: Fix services constraints
+
+on:
+  workflow_dispatch:
+
+jobs:
+  fix-services:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply services schema fixes
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          psql "$DATABASE_URL_UNPOOLED" << 'EOF'
+
+          ALTER TABLE services DROP CONSTRAINT IF EXISTS services_slug_unique;
+
+          ALTER TABLE services
+          ADD CONSTRAINT services_facility_slug_unique
+          UNIQUE (facility_id, slug);
+
+          ALTER TABLE services
+          ADD COLUMN IF NOT EXISTS advance_amount DECIMAL(10,2) NOT NULL DEFAULT 0.00;
+
+          EOF
+
+      - name: Verify services table
+        env:
+          DATABASE_URL_UNPOOLED: ${{ secrets.DATABASE_URL_UNPOOLED }}
+        run: |
+          psql "$DATABASE_URL_UNPOOLED" -c "\d services"
