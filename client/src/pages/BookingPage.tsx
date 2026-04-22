@@ -33,6 +33,7 @@ interface BookingState {
   serviceSlug?: string;
   serviceName?: string;
   servicePrice?: string;
+  serviceAdvance?: string;
   serviceDuration?: number;
   slotId?: number;
   slotDate?: string;
@@ -43,6 +44,7 @@ interface BookingState {
   bookingId?: number;
   referenceId?: string;
 }
+
 
 const STEP_ORDER: Step[] = ["service", "slot", "details", "payment", "done"];
 
@@ -88,7 +90,7 @@ function ServiceStep({
   onSelect,
 }: {
   initialSlug?: string;
-  onSelect: (s: { id: number; slug: string; name: string; price: string; duration: number }) => void;
+    onSelect: (s: { id: number; slug: string; name: string; price: string; advance: string; duration: number }) => void;
 }) {
   const { data: services, isLoading } = trpc.services.list.useQuery();
   const [selected, setSelected] = useState<number | null>(null);
@@ -159,6 +161,7 @@ function ServiceStep({
                     slug: service.slug,
                     name: service.name,
                     price: String(service.price),
+                    advance: String(service.advanceAmount ?? "0"),
                     duration: service.durationMinutes,
                   }), 120);
                 }}
@@ -514,12 +517,21 @@ function PaymentStep({
     uploadMutation.mutate({ bookingId: booking.bookingId, fileBase64, mimeType });
   };
 
-  const priceNum = parseFloat(booking.servicePrice ?? "0");
+  const totalPrice = parseFloat(booking.servicePrice ?? "0");
+  const advanceAmount = parseFloat(booking.serviceAdvance ?? "0");
+  const remainingAmount = totalPrice - advanceAmount;
+  const payNow = advanceAmount > 0 ? advanceAmount : totalPrice;
+  const hasAdvance = advanceAmount > 0 && advanceAmount < totalPrice;
+
   const upiId = facility?.upiId ?? "bestcricket@upi";
   const qrUrl = facility?.upiQrImageUrl;
 
   const copyUpi = () => {
     navigator.clipboard.writeText(upiId).then(() => toast.success("UPI ID copied!"));
+  };
+
+  const copyAmount = () => {
+    navigator.clipboard.writeText(String(payNow)).then(() => toast.success("Amount copied!"));
   };
 
   return (
@@ -533,22 +545,41 @@ function PaymentStep({
 
       {/* Amount Banner */}
       <div
-        className="rounded-2xl p-4 mb-5 flex items-center justify-between"
+        className="rounded-2xl p-4 mb-5"
         style={{ background: "linear-gradient(135deg, oklch(0.22 0.08 145), oklch(0.32 0.12 145))" }}
       >
-        <div>
-          <p className="text-xs text-white/70 font-medium">Amount to Pay</p>
-          <p className="text-3xl font-extrabold text-white mt-0.5" style={{ fontFamily: "Syne, sans-serif" }}>
-            ₹{priceNum.toLocaleString("en-IN")}
-          </p>
-          <p className="text-xs text-white/60 mt-0.5">{booking.serviceName}</p>
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <p className="text-xs text-white/70 font-medium">{hasAdvance ? "Advance to Pay Now" : "Amount to Pay"}</p>
+            <p className="text-3xl font-extrabold text-white mt-0.5" style={{ fontFamily: "Syne, sans-serif" }}>
+              ₹{payNow.toLocaleString("en-IN")}
+            </p>
+            <p className="text-xs text-white/60 mt-0.5">{booking.serviceName}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-white/70">
+              {booking.slotDate && new Date(booking.slotDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+            </p>
+            <p className="text-sm font-semibold text-white mt-0.5">{booking.slotStart} – {booking.slotEnd}</p>
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-white/70">
-            {booking.slotDate && new Date(booking.slotDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-          </p>
-          <p className="text-sm font-semibold text-white mt-0.5">{booking.slotStart} – {booking.slotEnd}</p>
-        </div>
+
+        {hasAdvance && (
+          <div className="border-t border-white/20 pt-3 space-y-1.5">
+            <div className="flex justify-between text-xs text-white/80">
+              <span>Total price</span>
+              <span className="font-semibold">₹{totalPrice.toLocaleString("en-IN")}</span>
+            </div>
+            <div className="flex justify-between text-xs text-white/80">
+              <span>Pay now (advance)</span>
+              <span className="font-semibold text-white">₹{advanceAmount.toLocaleString("en-IN")}</span>
+            </div>
+            <div className="flex justify-between text-xs text-white/80">
+              <span>Pay at ground</span>
+              <span className="font-semibold">₹{remainingAmount.toLocaleString("en-IN")}</span>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* UPI Section */}
@@ -570,7 +601,7 @@ function PaymentStep({
           </div>
         )}
 
-        <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-3">
+        <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-3 mb-2">
           <div className="flex-1 min-w-0">
             <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">UPI ID</p>
             <p className="text-sm font-bold text-foreground mt-0.5 truncate">{upiId}</p>
@@ -580,9 +611,24 @@ function PaymentStep({
             className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
             style={{ color: "oklch(0.38 0.13 145)" }}
           >
-            <Copy className="w-3.5 h-3.5" /> Copy
+            <Copy className="w-3.5 h-3.5" /> Copy UPI
           </button>
         </div>
+
+        <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Amount</p>
+            <p className="text-sm font-bold text-foreground mt-0.5">₹{payNow.toLocaleString("en-IN")}</p>
+          </div>
+          <button
+            onClick={copyAmount}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
+            style={{ color: "oklch(0.38 0.13 145)" }}
+          >
+            <Copy className="w-3.5 h-3.5" /> Copy Amount
+          </button>
+        </div>
+
         <p className="text-xs text-muted-foreground mt-3 text-center">Scan QR or copy UPI ID to pay</p>
       </div>
 
@@ -627,7 +673,14 @@ function PaymentStep({
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5">
         <p className="text-xs font-semibold text-amber-800 mb-1.5">Important Instructions</p>
         <ul className="text-xs text-amber-700 space-y-1">
-          <li>• Pay the exact amount shown above</li>
+          {hasAdvance ? (
+            <>
+              <li>• Pay the advance amount of ₹{advanceAmount.toLocaleString("en-IN")} now via UPI</li>
+              <li>• Remaining ₹{remainingAmount.toLocaleString("en-IN")} is payable at the ground</li>
+            </>
+          ) : (
+            <li>• Pay the exact amount of ₹{payNow.toLocaleString("en-IN")} shown above</li>
+          )}
           <li>• Take a screenshot of the payment confirmation</li>
           <li>• Upload the screenshot using the button above</li>
           <li>• Your booking is confirmed once the coach reviews it</li>
@@ -652,6 +705,7 @@ function PaymentStep({
     </div>
   );
 }
+
 
 // ─── Step 5: Done ─────────────────────────────────────────────────────────────
 function DoneStep({ booking }: { booking: BookingState }) {
@@ -758,6 +812,7 @@ export default function BookingPage() {
           serviceSlug: svc.slug,
           serviceName: svc.name,
           servicePrice: String(svc.price),
+          serviceAdvance: String(svc.advanceAmount ?? "0"),
           serviceDuration: svc.durationMinutes,
         });
       }
@@ -817,9 +872,10 @@ export default function BookingPage() {
           <ServiceStep
             initialSlug={booking.serviceSlug}
             onSelect={(service) => {
-              setBooking({ serviceId: service.id, serviceSlug: service.slug, serviceName: service.name, servicePrice: service.price, serviceDuration: service.duration });
-              setStep("slot");
+             setBooking({ serviceId: service.id, serviceSlug: service.slug, serviceName: service.name, servicePrice: service.price, serviceAdvance: service.advance, serviceDuration: service.duration });
+             setStep("slot");
             }}
+
           />
         )}
 
