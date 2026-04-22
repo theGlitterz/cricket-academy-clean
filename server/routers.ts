@@ -258,7 +258,7 @@ const servicesRouter = router({
     return getAllServices(FACILITY_ID);
   }),
 
-  /** Admin: create or update a service */
+   /** Admin: create or update a service */
   upsert: adminProcedure
     .input(
       z.object({
@@ -267,19 +267,30 @@ const servicesRouter = router({
         name: z.string().min(1),
         description: z.string().optional(),
         durationMinutes: z.number().int().min(15),
-        price: z.string(), // decimal as string to avoid float precision issues
+        price: z.string(),
+        advanceAmount: z.string().default("0"),
         activeStatus: z.boolean().default(true),
         sortOrder: z.number().int().default(0),
       })
     )
     .mutation(async ({ input }) => {
+      const price = parseFloat(input.price);
+      const advance = parseFloat(input.advanceAmount);
+      if (advance > price) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Advance amount cannot exceed the total price.",
+        });
+      }
       await upsertService({
         ...input,
         facilityId: FACILITY_ID,
         price: input.price,
+        advanceAmount: input.advanceAmount,
       });
       return { success: true };
     }),
+
 });
 
 // ─── Slots router ─────────────────────────────────────────────────────────────
