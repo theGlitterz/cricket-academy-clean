@@ -167,8 +167,21 @@ export async function upsertService(data: InsertService): Promise<void> {
   await db
     .insert(services)
     .values(data)
-    .onConflictDoUpdate({ target: services.slug, set: { ...data, updatedAt: new Date() } });
+    .onConflictDoUpdate({
+      target: [services.facilityId, services.slug],
+      set: {
+        name: data.name,
+        description: data.description,
+        durationMinutes: data.durationMinutes,
+        price: data.price,
+        advanceAmount: data.advanceAmount,
+        activeStatus: data.activeStatus,
+        sortOrder: data.sortOrder,
+        updatedAt: new Date(),
+      },
+    });
 }
+
 
 // ─── Slots ────────────────────────────────────────────────────────────────────
 
