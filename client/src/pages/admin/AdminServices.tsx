@@ -14,8 +14,6 @@ import {
   Pencil, Plus, Loader2, CheckCircle2, AlertCircle, X,
 } from "lucide-react";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
 interface ServiceRow {
   id: number;
   slug: string;
@@ -23,6 +21,7 @@ interface ServiceRow {
   description: string | null;
   durationMinutes: number;
   price: string;
+  advanceAmount: string;
   activeStatus: boolean;
   sortOrder: number;
 }
@@ -34,11 +33,10 @@ const EMPTY_FORM = {
   description: "",
   durationMinutes: 60,
   price: "",
+  advanceAmount: "0",
   activeStatus: true,
   sortOrder: 0,
 };
-
-// ─── Service Form (inline modal) ──────────────────────────────────────────────
 
 function ServiceForm({
   initial,
@@ -63,7 +61,12 @@ function ServiceForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    if (!form.slug.trim() || !form.name.trim() || !form.price.trim()) return;
+    const price = parseFloat(form.price);
+    const advance = parseFloat(form.advanceAmount || "0");
+    if (isNaN(price) || price < 0) { setError("Enter a valid price."); return; }
+    if (isNaN(advance) || advance < 0) { setError("Enter a valid advance amount."); return; }
+    if (advance > price) { setError("Advance amount cannot exceed the total price."); return; }
+    if (!form.slug.trim() || !form.name.trim()) return;
     upsert.mutate({
       id: form.id,
       slug: form.slug.trim(),
@@ -71,6 +74,7 @@ function ServiceForm({
       description: form.description?.trim() || undefined,
       durationMinutes: Number(form.durationMinutes),
       price: form.price.trim(),
+      advanceAmount: form.advanceAmount.trim() || "0",
       activeStatus: form.activeStatus,
       sortOrder: Number(form.sortOrder),
     });
@@ -96,7 +100,9 @@ function ServiceForm({
           </div>
 
           <div className="space-y-1">
-            <Label htmlFor="svcSlug">Slug * <span className="text-xs text-muted-foreground">(URL-safe, e.g. ground-booking)</span></Label>
+            <Label htmlFor="svcSlug">
+              Slug * <span className="text-xs text-muted-foreground">(URL-safe, e.g. ground-booking)</span>
+            </Label>
             <Input id="svcSlug" value={form.slug}
               onChange={(e) => set("slug", e.target.value.toLowerCase().replace(/\s+/g, "-"))} required />
           </div>
@@ -109,37 +115,43 @@ function ServiceForm({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <Label htmlFor="svcPrice">Price (₹) *</Label>
+              <Label htmlFor="svcPrice">Total Price (₹) *</Label>
               <Input id="svcPrice" type="number" min="0" step="0.01" value={form.price}
                 onChange={(e) => set("price", e.target.value)} required />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="svcDuration">Duration (min) *</Label>
-              <Input id="svcDuration" type="number" min="15" step="15" value={form.durationMinutes}
-                onChange={(e) => set("durationMinutes", Number(e.target.value))} required />
+              <Label htmlFor="svcAdvance">Advance Amount (₹)</Label>
+              <Input id="svcAdvance" type="number" min="0" step="0.01" value={form.advanceAmount}
+                onChange={(e) => set("advanceAmount", e.target.value)} />
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
+              <Label htmlFor="svcDuration">Duration (min) *</Label>
+              <Input id="svcDuration" type="number" min="15" step="15" value={form.durationMinutes}
+                onChange={(e) => set("durationMinutes", Number(e.target.value))} required />
+            </div>
+            <div className="space-y-1">
               <Label htmlFor="svcSort">Sort Order</Label>
               <Input id="svcSort" type="number" value={form.sortOrder}
                 onChange={(e) => set("sortOrder", Number(e.target.value))} />
             </div>
-            <div className="space-y-1">
-              <Label>Status</Label>
-              <div className="flex items-center gap-2 h-9">
-                <input
-                  id="svcActive"
-                  type="checkbox"
-                  checked={form.activeStatus}
-                  onChange={(e) => set("activeStatus", e.target.checked)}
-                  className="w-4 h-4 accent-primary"
-                />
-                <label htmlFor="svcActive" className="text-sm text-foreground cursor-pointer">
-                  Active
-                </label>
-              </div>
+          </div>
+
+          <div className="space-y-1">
+            <Label>Status</Label>
+            <div className="flex items-center gap-2 h-9">
+              <input
+                id="svcActive"
+                type="checkbox"
+                checked={form.activeStatus}
+                onChange={(e) => set("activeStatus", e.target.checked)}
+                className="w-4 h-4 accent-primary"
+              />
+              <label htmlFor="svcActive" className="text-sm text-foreground cursor-pointer">
+                Active (visible on booking page)
+              </label>
             </div>
           </div>
 
@@ -165,8 +177,6 @@ function ServiceForm({
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
-
 export default function AdminServices() {
   const utils = trpc.useUtils();
   const { data: services = [], isLoading } = trpc.services.listAll.useQuery();
@@ -181,6 +191,7 @@ export default function AdminServices() {
       description: s.description ?? "",
       durationMinutes: s.durationMinutes,
       price: s.price,
+      advanceAmount: s.advanceAmount ?? "0",
       activeStatus: s.activeStatus,
       sortOrder: s.sortOrder,
     });
@@ -224,7 +235,7 @@ export default function AdminServices() {
           </Card>
         ) : (
           <div className="space-y-2">
-            {services.map((s) => (
+            {(services as ServiceRow[]).map((s) => (
               <Card key={s.id}>
                 <CardHeader className="py-3 px-4">
                   <div className="flex items-start justify-between gap-3">
@@ -243,8 +254,10 @@ export default function AdminServices() {
                       {s.description && (
                         <p className="text-xs text-muted-foreground mt-0.5 truncate">{s.description}</p>
                       )}
-                      <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground">
-                        <span>₹{s.price}</span>
+                      <div className="flex items-center gap-3 mt-1.5 text-xs text-muted-foreground flex-wrap">
+                        <span>₹{s.price} total</span>
+                        <span>·</span>
+                        <span>₹{s.advanceAmount ?? "0"} advance</span>
                         <span>·</span>
                         <span>{s.durationMinutes} min</span>
                         <span>·</span>
