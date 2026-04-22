@@ -89,12 +89,14 @@ export type InsertFacility = typeof facilities.$inferInsert;
  * A bookable service offered by a facility.
  * V1 services: Ground Booking, Net Practice, Personal Coaching.
  */
-export const services = pgTable("services", {
+export const services = pgTable(
+  "services",
+  {
   id: serial("id").primaryKey(),
   /** FK → facilities.id */
   facilityId: integer("facility_id").notNull(),
   /** URL-safe slug used in booking links, e.g. "ground-booking" */
-  slug: text("slug").notNull().unique(),
+  slug: text("slug").notNull(),
   /** Display name, e.g. "Ground Booking" */
   name: text("name").notNull(),
   /** Short description shown on the booking page */
@@ -112,7 +114,10 @@ export const services = pgTable("services", {
   sortOrder: integer("sort_order").notNull().default(0),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
+  },
+  (t) => [uniqueIndex("services_facility_slug_unique").on(t.facilityId, t.slug)]
+);
+
 export type Service = typeof services.$inferSelect;
 export type InsertService = typeof services.$inferInsert;
 
