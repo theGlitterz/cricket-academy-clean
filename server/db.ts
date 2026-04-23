@@ -787,3 +787,41 @@ export async function createFacilityAdmin(input: {
     facilityId: input.facilityId,
   });
 }
+
+export async function deleteFacility(facilityId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  // Block if any users are linked
+  const linkedUsers = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.facilityId, facilityId))
+    .limit(1);
+  if (linkedUsers.length > 0) {
+    throw new Error("Cannot delete: this facility has admin users assigned to it. Remove them first.");
+  }
+
+  // Block if any services are linked
+  const linkedServices = await db
+    .select({ id: services.id })
+    .from(services)
+    .where(eq(services.facilityId, facilityId))
+    .limit(1);
+  if (linkedServices.length > 0) {
+    throw new Error("Cannot delete: this facility has services configured. Remove them first.");
+  }
+
+  // Block if any slots are linked
+  const linkedSlots = await db
+    .select({ id: slots.id })
+    .from(slots)
+    .where(eq(slots.facilityId, facilityId))
+    .limit(1);
+  if (linkedSlots.length > 0) {
+    throw new Error("Cannot delete: this facility has slots. Remove them first.");
+  }
+
+  await db.delete(facilities).where(eq(facilities.id, facilityId));
+}
+
