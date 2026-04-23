@@ -2,7 +2,7 @@
  * AdminSlots — Slot management page for the coach.
  * Create individual slots, bulk-create a day's schedule, block/unblock, and delete slots.
  */
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import {
@@ -64,19 +64,37 @@ function formatDisplayDate(dateStr: string) {
   });
 }
 
-// Default bulk schedule: 6AM–10AM + 3PM–9PM, 60-min slots
-const DEFAULT_BULK_TIMES = [
-  { startTime: "06:00", endTime: "07:00" },
-  { startTime: "07:00", endTime: "08:00" },
-  { startTime: "08:00", endTime: "09:00" },
-  { startTime: "09:00", endTime: "10:00" },
-  { startTime: "15:00", endTime: "16:00" },
-  { startTime: "16:00", endTime: "17:00" },
-  { startTime: "17:00", endTime: "18:00" },
-  { startTime: "18:00", endTime: "19:00" },
-  { startTime: "19:00", endTime: "20:00" },
-  { startTime: "20:00", endTime: "21:00" },
-];
+/** Add minutes to a HH:MM string, returns HH:MM */
+function addMinutesToTime(time: string, minutes: number): string {
+  const [h, m] = time.split(":").map(Number);
+  const total = (h ?? 0) * 60 + (m ?? 0) + minutes;
+  const hh = Math.floor(total / 60) % 24;
+  const mm = total % 60;
+  return `${String(hh).padStart(2, "0")}:${String(mm).padStart(2, "0")}`;
+}
+
+/** Generate time slots for a day based on service duration */
+function generateTimeSlots(durationMinutes: number): { startTime: string; endTime: string }[] {
+  // Morning: 06:00 to 10:00, Evening: 15:00 to 21:00
+  const windows = [
+    { from: "06:00", to: "10:00" },
+    { from: "15:00", to: "21:00" },
+  ];
+  const result: { startTime: string; endTime: string }[] = [];
+  for (const w of windows) {
+    let cur = w.from;
+    while (true) {
+      const end = addMinutesToTime(cur, durationMinutes);
+      // Stop if end exceeds window end
+      const [eh, em] = end.split(":").map(Number);
+      const [wh, wm] = w.to.split(":").map(Number);
+      if ((eh ?? 0) * 60 + (em ?? 0) > (wh ?? 0) * 60 + (wm ?? 0)) break;
+      result.push({ startTime: cur, endTime: end });
+      cur = end;
+    }
+  }
+  return result;
+}
 
 const AVAIL_CARD_CSS: Record<string, string> = {
   available: "border-green-200 bg-green-50/30",
@@ -106,18 +124,40 @@ export default function AdminSlots() {
 
   // Single slot form
   const [newServiceId, setNewServiceId] = useState("");
+  const [newDate, setNewDate] = useState(today);
   const [newStart, setNewStart] = useState("06:00");
-  const [newEnd, setNewEnd] = useState("07:00");
   const [newCapacity, setNewCapacity] = useState("1");
 
   // Bulk form
   const [bulkServiceId, setBulkServiceId] = useState("");
-  const [bulkDays, setBulkDays] = useState("7");
+  const [bulkFromDate, setBulkFromDate] = useState(today);
+  const [bulkToDate, setBulkToDate] = useState(toDateStr(addDays(new Date(), 6)));
 
   const utils = trpc.useUtils();
 
   const { data: services } = trpc.services.listAll.useQuery();
   const { data: slots, isLoading } = trpc.slots.getByDate.useQuery({ date: selectedDate });
+
+  // Derive selected service objects for duration lookup
+  const selectedService = services?.find((s) => String(s.id) === newServiceId);
+  const bulkService = services?.find((s) => String(s.id) === bulkServiceId);
+
+  // Auto-calculated end time for single slot
+  const computedEndTime = selectedService
+    ? addMinutesToTime(newStart, selectedService.durationMinutes)
+    : addMinutesToTime(newStart, 60);
+
+  // Preview of bulk slots count
+  const bulkTimeSlots = bulkService
+    ? generateTimeSlots(bulkService.durationMinutes)
+    : generateTimeSlots(60);
+
+  const bulkDayCount = useMemo(() => {
+    const from = new Date(bulkFromDate + "T00:00:00");
+    const to = new Date(bulkToDate + "T00:00:00");
+    const diff = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
+    return Math.max(1, diff);
+  }, [bulkFromDate, bulkToDate]);
 
   const createSlotMutation = trpc.slots.create.useMutation({
     onSuccess: () => {
@@ -163,14 +203,15 @@ export default function AdminSlots() {
       toast.error("Please select a service.");
       return;
     }
-    const days = parseInt(bulkDays, 10);
-    const fromDate = today;
-    const toDate = toDateStr(addDays(new Date(), days - 1));
+    if (bulkFromDate > bulkToDate) {
+      toast.error("From date must be before or equal to To date.");
+      return;
+    }
     createBulkMutation.mutate({
       serviceId: parseInt(bulkServiceId, 10),
-      fromDate,
-      toDate,
-      timeSlots: DEFAULT_BULK_TIMES,
+      fromDate: bulkFromDate,
+      toDate: bulkToDate,
+      timeSlots: bulkTimeSlots,
       maxCapacity: 1,
     });
   };
@@ -209,12 +250,18 @@ export default function AdminSlots() {
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <div className="flex-1 text-center">
+        <button
+          className="flex-1 text-center py-1 rounded-xl hover:bg-muted transition-colors"
+          onClick={() => {
+            const val = prompt("Enter date (YYYY-MM-DD):", selectedDate);
+            if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) setSelectedDate(val);
+          }}
+        >
           <p className="text-sm font-semibold text-foreground">{formatDisplayDate(selectedDate)}</p>
           {selectedDate === today && (
             <span className="text-[10px] text-primary font-medium">Today</span>
           )}
-        </div>
+        </button>
         <button
           onClick={() =>
             setSelectedDate(toDateStr(addDays(new Date(selectedDate + "T00:00:00"), 1)))
@@ -296,7 +343,7 @@ export default function AdminSlots() {
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      {svc?.name ?? `Service #${slot.serviceId}`}
+                      {svc?.name ?? "Unknown service"}
                     </p>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -369,7 +416,7 @@ export default function AdminSlots() {
                 <SelectContent>
                   {services?.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
-                      {s.name}
+                      {s.name} ({s.durationMinutes} min)
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -377,28 +424,33 @@ export default function AdminSlots() {
             </div>
             <div>
               <Label className="text-xs mb-1.5 block">Date</Label>
-              <p className="text-sm font-medium text-foreground">{formatDisplayDate(selectedDate)}</p>
-              <p className="text-xs text-muted-foreground">Change date using the navigator above.</p>
+              <Input
+                type="date"
+                value={newDate}
+                min={today}
+                onChange={(e) => setNewDate(e.target.value)}
+                className="rounded-xl"
+              />
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <Label className="text-xs mb-1.5 block">Start Time</Label>
-                <Input
-                  type="time"
-                  value={newStart}
-                  onChange={(e) => setNewStart(e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
-              <div>
-                <Label className="text-xs mb-1.5 block">End Time</Label>
-                <Input
-                  type="time"
-                  value={newEnd}
-                  onChange={(e) => setNewEnd(e.target.value)}
-                  className="rounded-xl"
-                />
-              </div>
+            <div>
+              <Label className="text-xs mb-1.5 block">Start Time</Label>
+              <Input
+                type="time"
+                value={newStart}
+                onChange={(e) => setNewStart(e.target.value)}
+                className="rounded-xl"
+              />
+            </div>
+            <div className="rounded-xl bg-muted/50 px-3 py-2.5 flex items-center justify-between">
+              <span className="text-xs text-muted-foreground">End Time (auto)</span>
+              <span className="text-sm font-semibold text-foreground">
+                {formatTime(computedEndTime)}
+                {selectedService && (
+                  <span className="text-xs text-muted-foreground font-normal ml-1">
+                    ({selectedService.durationMinutes} min)
+                  </span>
+                )}
+              </span>
             </div>
             <div>
               <Label className="text-xs mb-1.5 block">Max Capacity</Label>
@@ -418,13 +470,13 @@ export default function AdminSlots() {
             </Button>
             <Button
               className="flex-1"
-              disabled={createSlotMutation.isPending || !newServiceId}
+              disabled={createSlotMutation.isPending || !newServiceId || !newDate}
               onClick={() =>
                 createSlotMutation.mutate({
                   serviceId: parseInt(newServiceId, 10),
-                  date: selectedDate,
+                  date: newDate,
                   startTime: newStart,
-                  endTime: newEnd,
+                  endTime: computedEndTime,
                   maxCapacity: parseInt(newCapacity, 10),
                 })
               }
@@ -446,9 +498,6 @@ export default function AdminSlots() {
             <DialogTitle>Bulk Create Slots</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-1">
-            <p className="text-xs text-muted-foreground">
-              Creates 10 slots per day (6AM–10AM + 3PM–9PM) starting from today.
-            </p>
             <div>
               <Label className="text-xs mb-1.5 block">Service</Label>
               <Select value={bulkServiceId} onValueChange={setBulkServiceId}>
@@ -458,25 +507,41 @@ export default function AdminSlots() {
                 <SelectContent>
                   {services?.map((s) => (
                     <SelectItem key={s.id} value={String(s.id)}>
-                      {s.name}
+                      {s.name} ({s.durationMinutes} min)
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div>
-              <Label className="text-xs mb-1.5 block">Number of Days</Label>
-              <Select value={bulkDays} onValueChange={setBulkDays}>
-                <SelectTrigger className="rounded-xl">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7">7 days (70 slots)</SelectItem>
-                  <SelectItem value="14">14 days (140 slots)</SelectItem>
-                  <SelectItem value="30">30 days (300 slots)</SelectItem>
-                </SelectContent>
-              </Select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs mb-1.5 block">From Date</Label>
+                <Input
+                  type="date"
+                  value={bulkFromDate}
+                  min={today}
+                  onChange={(e) => setBulkFromDate(e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
+              <div>
+                <Label className="text-xs mb-1.5 block">To Date</Label>
+                <Input
+                  type="date"
+                  value={bulkToDate}
+                  min={bulkFromDate}
+                  onChange={(e) => setBulkToDate(e.target.value)}
+                  className="rounded-xl"
+                />
+              </div>
             </div>
+            {bulkServiceId && (
+              <div className="rounded-xl bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground space-y-1">
+                <p><span className="font-medium text-foreground">{bulkTimeSlots.length} slots/day</span> × {bulkDayCount} days = <span className="font-medium text-foreground">{bulkTimeSlots.length * bulkDayCount} total slots</span></p>
+                <p>Times: {bulkTimeSlots.slice(0, 3).map(t => formatTime(t.startTime)).join(", ")}{bulkTimeSlots.length > 3 ? ` +${bulkTimeSlots.length - 3} more` : ""}</p>
+                <p>Duration: {bulkService?.durationMinutes} min per slot</p>
+              </div>
+            )}
           </div>
           <DialogFooter className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => setBulkOpen(false)}>
@@ -484,13 +549,13 @@ export default function AdminSlots() {
             </Button>
             <Button
               className="flex-1"
-              disabled={createBulkMutation.isPending || !bulkServiceId}
+              disabled={createBulkMutation.isPending || !bulkServiceId || bulkFromDate > bulkToDate}
               onClick={handleBulkCreate}
             >
               {createBulkMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                `Create ${parseInt(bulkDays) * 10} Slots`
+                `Create ${bulkTimeSlots.length * bulkDayCount} Slots`
               )}
             </Button>
           </DialogFooter>
