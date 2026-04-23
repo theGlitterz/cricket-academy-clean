@@ -346,12 +346,11 @@ function SlotStep({
 function DetailsStep({
   booking,
   onSubmit,
-  isLoading,
 }: {
   booking: BookingState;
   onSubmit: (name: string, whatsApp: string) => void;
-  isLoading: boolean;
 }) {
+
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [errors, setErrors] = useState<{ name?: string; phone?: string }>({});
@@ -464,14 +463,12 @@ function DetailsStep({
         <Button
           type="submit"
           size="lg"
-          disabled={isLoading}
           className="w-full h-12 rounded-xl text-base font-semibold mt-2"
           style={{ background: "oklch(0.38 0.13 145)", color: "white" }}
         >
-          {isLoading ? (
-            <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Creating booking…</>
-          ) : "Continue to Payment →"}
+          Continue to Payment →
         </Button>
+
       </form>
     </div>
   );
@@ -483,13 +480,19 @@ function PaymentStep({
   onPaymentUploaded,
 }: {
   booking: BookingState;
-  onPaymentUploaded: () => void;
+  onPaymentUploaded: (bookingId: number, referenceId: string) => void;
 }) {
   const { data: facility } = trpc.facility.get.useQuery();
+
+  const createBookingMutation = trpc.bookings.create.useMutation({
+    onError: (err) => toast.error(err.message ?? "Failed to create booking. Please try again."),
+  });
+
   const uploadMutation = trpc.bookings.uploadPayment.useMutation({
-    onSuccess: () => { toast.success("Payment screenshot uploaded!"); onPaymentUploaded(); },
+    onSuccess: () => { toast.success("Payment screenshot uploaded!"); },
     onError: (err) => toast.error(err.message),
   });
+
 
   const [preview, setPreview] = useState<string | null>(null);
   const [fileBase64, setFileBase64] = useState<string | null>(null);
@@ -511,11 +514,30 @@ function PaymentStep({
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!fileBase64) { toast.error("Please upload your payment screenshot first"); return; }
-    if (!booking.bookingId) { toast.error("Booking ID not found. Please restart."); return; }
-    uploadMutation.mutate({ bookingId: booking.bookingId, fileBase64, mimeType });
+    if (!booking.slotId || !booking.serviceId || !booking.playerName || !booking.playerWhatsApp) {
+      toast.error("Booking details missing. Please go back and try again.");
+      return;
+    }
+    try {
+      const result = await createBookingMutation.mutateAsync({
+        slotId: booking.slotId,
+        serviceId: booking.serviceId,
+        playerName: booking.playerName,
+        playerWhatsApp: booking.playerWhatsApp,
+      });
+      await uploadMutation.mutateAsync({
+        bookingId: result.id,
+        fileBase64,
+        mimeType,
+      });
+      onPaymentUploaded(result.id, result.referenceId);
+    } catch {
+      // errors already shown via onError handlers above
+    }
   };
+
 
   const totalPrice = parseFloat(booking.servicePrice ?? "0");
   const advanceAmount = parseFloat(booking.serviceAdvance ?? "0");
@@ -690,14 +712,15 @@ function PaymentStep({
       <Button
         size="lg"
         onClick={handleSubmit}
-        disabled={!fileBase64 || uploadMutation.isPending}
+        disabled={!fileBase64 || createBookingMutation.isPending || uploadMutation.isPending}
         className="w-full h-12 rounded-xl text-base font-semibold"
         style={{ background: "oklch(0.38 0.13 145)", color: "white" }}
       >
-        {uploadMutation.isPending ? (
+        {(createBookingMutation.isPending || uploadMutation.isPending) ? (
           <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting…</>
         ) : "Submit Booking Request"}
       </Button>
+
 
       {!fileBase64 && (
         <p className="text-xs text-center text-muted-foreground mt-2">Upload your payment screenshot to continue</p>
@@ -819,13 +842,6 @@ export default function BookingPage() {
     }
   }, [params.serviceSlug, services, booking.serviceId]);
 
-  const createBookingMutation = trpc.bookings.create.useMutation({
-    onSuccess: (data) => {
-      setBooking((prev) => ({ ...prev, bookingId: data.id, referenceId: data.referenceId }));
-      setStep("payment");
-    },
-    onError: (err) => toast.error(err.message ?? "Failed to create booking. Please try again."),
-  });
 
   const goBack = useCallback(() => {
     if (step === "done") return;
@@ -890,25 +906,27 @@ export default function BookingPage() {
           />
         )}
 
-        {step === "details" && (
+              {step === "details" && (
           <DetailsStep
             booking={booking}
-            isLoading={createBookingMutation.isPending}
             onSubmit={(name, whatsApp) => {
               setBooking((prev) => ({ ...prev, playerName: name, playerWhatsApp: whatsApp }));
-              createBookingMutation.mutate({
-                slotId: booking.slotId!,
-                serviceId: booking.serviceId!,
-                playerName: name,
-                playerWhatsApp: whatsApp,
-              });
+              setStep("payment");
             }}
           />
         )}
 
-        {step === "payment" && (
-          <PaymentStep booking={booking} onPaymentUploaded={() => setStep("done")} />
+
+          {step === "payment" && (
+          <PaymentStep
+            booking={booking}
+            onPaymentUploaded={(bookingId, referenceId) => {
+              setBooking((prev) => ({ ...prev, bookingId, referenceId }));
+              setStep("done");
+            }}
+          />
         )}
+
 
         {step === "done" && <DoneStep booking={booking} />}
       </main>
