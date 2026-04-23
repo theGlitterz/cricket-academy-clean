@@ -705,7 +705,7 @@ function PaymentStep({
           )}
           <li>• Take a screenshot of the payment confirmation</li>
           <li>• Upload the screenshot using the button above</li>
-          <li>• Your booking is confirmed once the coach reviews it</li>
+          <li>• Your booking is confirmed automatically after screenshot upload</li>
         </ul>
       </div>
 
@@ -743,19 +743,20 @@ function DoneStep({ booking }: { booking: BookingState }) {
       </div>
 
       <h1 className="text-2xl font-extrabold text-foreground mb-2" style={{ fontFamily: "Syne, sans-serif" }}>
-        Booking Submitted!
+        Booking Confirmed!
       </h1>
       <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
-        Your request has been received. The coach will review your payment and confirm your booking.
+        Your payment has been received and your slot is confirmed.
       </p>
 
       {/* Reference Card */}
       <div className="bg-white border border-border rounded-2xl p-5 text-left mb-5">
         <div className="flex items-center justify-between mb-3">
           <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Booking Reference</p>
-          <Badge className="text-xs font-semibold px-2.5 py-1 rounded-full border-0" style={{ background: "oklch(0.78 0.17 85 / 0.2)", color: "oklch(0.45 0.12 85)" }}>
-            Pending Review
+            <Badge className="text-xs font-semibold px-2.5 py-1 rounded-full border-0" style={{ background: "oklch(0.38 0.13 145 / 0.15)", color: "oklch(0.38 0.13 145)" }}>
+            Confirmed
           </Badge>
+
         </div>
         <p className="text-2xl font-extrabold mb-4 tracking-wider" style={{ fontFamily: "Syne, sans-serif", color: "oklch(0.38 0.13 145)" }}>
           {booking.referenceId}
@@ -786,7 +787,7 @@ function DoneStep({ booking }: { booking: BookingState }) {
       <div className="rounded-2xl p-4 text-left mb-6 border" style={{ background: "oklch(0.95 0.03 145)", borderColor: "oklch(0.85 0.06 145)" }}>
         <p className="text-xs font-semibold mb-2" style={{ color: "oklch(0.38 0.13 145)" }}>What happens next?</p>
         <ul className="text-xs text-muted-foreground space-y-1.5">
-          {["The coach reviews your payment screenshot", "You receive a WhatsApp confirmation", "Slot is locked once confirmed"].map((text, i) => (
+          {["Your slot is locked — no one else can book it", "Show your booking reference & make remaining payment at the ground", "Arrive 10 minutes before your session"].map((text, i) => (
             <li key={i} className="flex items-start gap-1.5">
               <span className="mt-0.5 w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-[9px] font-bold text-primary">{i + 1}</span>
               {text}
@@ -855,7 +856,7 @@ export default function BookingPage() {
     slot: "Pick a Slot",
     details: "Your Details",
     payment: "Payment",
-    done: "Booking Submitted",
+    done: "Booking Confirmed",
   };
 
   return (
