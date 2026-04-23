@@ -504,16 +504,18 @@ const bookingsRouter = router({
         const facility = await getFacility();
 
         const message = buildCoachNewBookingAlert({
-          playerName: booking.playerName,
-          serviceName: service?.name ?? "Booking",
-          bookingDate: booking.bookingDate,
-          startTime: booking.startTime,
-          endTime: booking.endTime,
-          amount: Number(booking.amount),
-          referenceId: booking.referenceId,
-          facilityName: facility?.facilityName ?? "Facility",
-          coachWhatsApp: facility?.coachWhatsApp ?? "",
-        });
+  playerName: booking.playerName,
+  serviceName: service?.name ?? "Booking",
+  bookingDate: booking.bookingDate,
+  startTime: booking.startTime,
+  endTime: booking.endTime,
+  amount: Number(booking.amount),
+  advance: Number(service?.advanceAmount ?? 0),
+  remaining: Number(booking.amount) - Number(service?.advanceAmount ?? 0),
+  referenceId: booking.referenceId,
+  facilityName: facility?.facilityName ?? "Facility",
+  coachWhatsApp: booking.playerWhatsApp,
+});
 
         await sendCoachWhatsApp(message);
       } catch (err) {
