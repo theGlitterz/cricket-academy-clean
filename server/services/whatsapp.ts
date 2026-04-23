@@ -106,14 +106,22 @@ export function buildBookingRejectedMessage(
  */
 export function buildCoachNewBookingAlert(data: BookingMessageData): string {
   return (
-    `🔔 *New Booking Request*\n\n` +
-    `*Player:* ${data.playerName}\n` +
-    `*Service:* ${data.serviceName}\n` +
-    `*Date:* ${data.bookingDate}\n` +
-    `*Time:* ${data.startTime} – ${data.endTime}\n` +
-    `*Amount:* ₹${data.amount}\n` +
-    `*Reference:* ${data.referenceId}\n\n` +
-    `Review and confirm in the admin panel.`
+    `🏏 *New Booking Confirmed*\n\n` +
+
+    `👤 ${data.playerName}\n` +
+    `📞 ${data.coachWhatsApp}\n\n` +
+
+    `📅 ${data.bookingDate}\n` +
+    `⏰ ${data.startTime} – ${data.endTime}\n\n` +
+
+    `🎯 ${data.serviceName}\n` +
+
+    `💰 Advance: ₹${data.advance}\n` +
+    `💳 Remaining: ₹${data.remaining}\n\n` +
+
+    `🆔 ${data.referenceId}\n\n` +
+
+    `✅ Slot reserved`
   );
 }
 
