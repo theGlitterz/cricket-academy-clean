@@ -305,8 +305,8 @@ export async function createSlot(data: InsertSlot): Promise<number> {
       and(
         eq(slots.facilityId, facilityId),
         eq(slots.date, data.date),
-        sql`${slots.start_time} < ${data.endTime}`,
-        sql`${slots.end_time} > ${data.startTime}`
+        sql`${slots.startTime} < ${data.endTime}`,
+        sql`${slots.endTime} > ${data.startTime}`
       )
     )
     .limit(1);
