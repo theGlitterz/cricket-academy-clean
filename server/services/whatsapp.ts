@@ -44,6 +44,8 @@ export interface BookingMessageData {
   referenceId: string;
   facilityName: string;
   coachWhatsApp: string;
+  advance: number;
+  remaining: number;
 }
 
 /**
