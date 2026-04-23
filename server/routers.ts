@@ -495,7 +495,7 @@ const bookingsRouter = router({
       }).catch(() => {});
 
       return { screenshotUrl: url };
-
+ }),
 
   /** Public: look up a booking by reference ID */
   getByReference: publicProcedure
