@@ -20,8 +20,8 @@ import { notifyOwner } from "./_core/notification";
 import { storagePut } from "./storage";
 import { signSession, verifySession } from "./_core/sdk";
 import { ENV } from "./_core/env";
-import { buildCoachNewBookingAlert } from "./whatsapp";
-import { sendCoachWhatsApp } from "./whatsappSender";
+import { buildCoachNewBookingAlert } from "./services/whatsapp";
+import { sendCoachWhatsApp } from "./services/whatsappSender";
 import {
   getUserByEmail,
   createUser,
