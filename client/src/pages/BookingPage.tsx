@@ -4,6 +4,7 @@
  * Mobile-first, optimised for WhatsApp link sharing.
  */
 import { trpc } from "@/lib/trpc";
+import { buildWhatsAppLink, buildPlayerToCoachMessage } from "@/lib/utils/booking";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -840,17 +841,25 @@ function DoneStep({ booking, facility }: { booking: BookingState; facility?: { c
         </ul>
       </div>
 
-      <div className="flex flex-col gap-3">
+           <div className="flex flex-col gap-3">
         <Link href={`/booking/${booking.referenceId}`}>
           <Button size="lg" className="w-full h-12 rounded-xl font-semibold" style={{ background: "oklch(0.38 0.13 145)", color: "white" }}>
             Track Booking Status
           </Button>
         </Link>
-        <a href={`https://wa.me/?text=${encodeURIComponent(shareText)}`} target="_blank" rel="noopener noreferrer">
+        {coachWaLink && (
+          <a href={coachWaLink} target="_blank" rel="noopener noreferrer">
+            <Button size="lg" className="w-full h-12 rounded-xl font-semibold" style={{ background: "oklch(0.25 0.12 145)", color: "white" }}>
+              Send details to coach on WhatsApp
+            </Button>
+          </a>
+        )}
+        <a href={`https://wa.me/?text=${encodeURIComponent(shareText )}`} target="_blank" rel="noopener noreferrer">
           <Button size="lg" variant="outline" className="w-full h-12 rounded-xl font-semibold border-2">
             Share on WhatsApp
           </Button>
         </a>
+
         <Link href="/">
           <Button variant="ghost" size="lg" className="w-full h-12 rounded-xl text-muted-foreground">
             Back to Home
