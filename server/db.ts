@@ -532,6 +532,14 @@ export async function updateBookingScreenshot(
     .set({ screenshotUrl, updatedAt: new Date() })
     .where(eq(bookings.id, bookingId));
 }
+export async function confirmBookingPaid(bookingId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  await db
+    .update(bookings)
+    .set({ bookingStatus: "confirmed", paymentStatus: "paid", updatedAt: new Date() })
+    .where(eq(bookings.id, bookingId));
+}
 
 /**
  * Admin: confirm a booking.
