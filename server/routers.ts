@@ -153,7 +153,7 @@ const authRouter = router({
 
 
       // ── Fallback: env-based super admin (for first-time setup before seed) ──
-      if (!adminEmail || !adminPassword) {
+        if (!adminEmail || !adminPassword || emailLower !== adminEmail.toLowerCase()) {
         throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
       }
       if (emailLower !== adminEmail.toLowerCase()) {
