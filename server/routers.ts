@@ -29,6 +29,7 @@ import {
   createFacility,
   createFacilityAdmin,
   getAllFacilities,
+  deleteFacility
 } from "./db";
 import bcrypt from "bcryptjs";
 import {
@@ -96,15 +97,12 @@ const authRouter = router({
         password: z.string().min(1, "Password is required"),
       })
     )
-        .mutation(async ({ input, ctx }) => {
-      const adminEmail = ENV.adminEmail;
-      const adminPassword = ENV.adminPassword;
+           .mutation(async ({ input, ctx }) => {
       const emailLower = input.email.toLowerCase();
 
-      // ── Try DB user first (facility_admin and super_admin created via UI) ──
+      // ── 1. Try DB user first (facility_admin and super_admin created via UI) ──
       const dbUser = await getUserByEmail(emailLower);
       if (dbUser && dbUser.passwordHash) {
-        // Only allow admin roles to log in here
         if (dbUser.role !== "super_admin" && dbUser.role !== "facility_admin" && dbUser.role !== "admin") {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
         }
@@ -112,7 +110,6 @@ const authRouter = router({
         if (!passwordValid) {
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
         }
-        // Sign JWT and set cookie
         const token = await signSession({
           userId: dbUser.id,
           email: dbUser.email,
@@ -123,6 +120,37 @@ const authRouter = router({
         touchUserSignIn(dbUser.id).catch(() => {});
         return { ok: true, user: { id: dbUser.id, email: dbUser.email, name: dbUser.name, role: dbUser.role } };
       }
+
+      // ── 2. Fallback: env-based super_admin (first-time setup before seed) ──
+      const adminEmail = ENV.adminEmail;
+      const adminPassword = ENV.adminPassword;
+      if (!adminEmail || !adminPassword || emailLower !== adminEmail.toLowerCase()) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+      }
+      let passwordValid = false;
+      if (adminPassword.startsWith("$2")) {
+        passwordValid = await bcrypt.compare(input.password, adminPassword);
+      } else {
+        passwordValid = input.password === adminPassword;
+      }
+      if (!passwordValid) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
+      }
+      // Auto-create DB record for env-based admin on first login
+      let user = await getUserByEmail(emailLower);
+      if (!user) {
+        const hash = await bcrypt.hash(input.password, 10);
+        await createUser({ email: emailLower, passwordHash: hash, name: "Admin", role: "super_admin" });
+        user = await getUserByEmail(emailLower);
+      }
+      if (!user) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user record" });
+      const token = await signSession({ userId: user.id, email: user.email, role: user.role });
+      const cookieOptions = getSessionCookieOptions(ctx.req);
+      ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
+      touchUserSignIn(user.id).catch(() => {});
+      return { ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
+    }),
+
 
       // ── Fallback: env-based super admin (for first-time setup before seed) ──
       if (!adminEmail || !adminPassword) {
@@ -239,13 +267,17 @@ const facilityRouter = router({
       const id = await createFacility(input);
       return { id };
     }),
-  /** super_admin only: delete a facility — blocked if it has linked data */
+  /** super_admin only: delete a facility (blocked if it has linked data) */
   delete: superAdminProcedure
     .input(z.object({ id: z.number().int() }))
     .mutation(async ({ input }) => {
+      if (input.id === 1) {
+        throw new TRPCError({ code: "BAD_REQUEST", message: "The primary facility cannot be deleted." });
+      }
       await deleteFacility(input.id);
       return { success: true };
     }),
+
 
 });
 
