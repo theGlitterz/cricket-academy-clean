@@ -485,13 +485,19 @@ const bookingsRouter = router({
       const key = `payments/${booking.referenceId}-${Date.now()}.${ext}`;
       const { url } = await storagePut(key, buffer, input.mimeType);
 
-      await updateBookingScreenshot(input.bookingId, url);
-
-      // Notify coach that screenshot was uploaded
+            await updateBookingScreenshot(input.bookingId, url);
+      // Auto-confirm the booking now that screenshot is uploaded
+      await db
+        .update(bookings)
+        .set({ bookingStatus: "confirmed", paymentStatus: "paid", updatedAt: new Date() })
+        .where(eq(bookings.id, input.bookingId));
+      // Notify owner that screenshot was uploaded
+           // Notify owner that booking is confirmed
       notifyOwner({
-        title: "Payment Screenshot Uploaded",
-        content: `${booking.playerName} has uploaded a payment screenshot for booking ${booking.referenceId}. Please review and confirm.`,
+        title: "Booking Confirmed",
+        content: `${booking.playerName} has confirmed payment for booking ${booking.referenceId}. Slot is reserved.`,
       }).catch(() => {});
+
 
       return { screenshotUrl: url };
     }),
