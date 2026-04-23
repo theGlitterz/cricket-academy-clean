@@ -49,6 +49,41 @@ export function buildShareMessage(booking: BookingSummary): string {
  * Build a WhatsApp deep link (wa.me) with a pre-filled message.
  * Used for "Contact Coach on WhatsApp" and "Share Booking" buttons.
  */
+/**
+ * Build the confirmed booking message from player to coach.
+ * Used on the booking success screen — "Send details to coach on WhatsApp".
+ */
+export interface ConfirmedBookingSummary {
+  playerName: string;
+  serviceName: string;
+  bookingDate: string;
+  startTime: string;
+  endTime: string;
+  referenceId: string;
+  totalPrice: number;
+  advancePaid: number;
+  remainingAtGround: number;
+  facilityName?: string;
+}
+export function buildPlayerToCoachMessage(b: ConfirmedBookingSummary): string {
+  const date = formatBookingDate(b.bookingDate);
+  const time = formatTimeRange(b.startTime, b.endTime);
+  return (
+    `🏏 *Booking Confirmed — ${b.facilityName ?? "BestCricketAcademy"}*\n\n` +
+    `Hi! My booking is confirmed. Here are the details:\n\n` +
+    `*Name:* ${b.playerName}\n` +
+    `*Service:* ${b.serviceName}\n` +
+    `*Date:* ${date}\n` +
+    `*Time:* ${time}\n` +
+    `*Reference:* ${b.referenceId}\n\n` +
+    `*Total Price:* ₹${b.totalPrice.toLocaleString("en-IN")}\n` +
+    `*Advance Paid:* ₹${b.advancePaid.toLocaleString("en-IN")}\n` +
+    `*Remaining at Ground:* ₹${b.remainingAtGround.toLocaleString("en-IN")}\n\n` +
+    `Payment screenshot has been uploaded. See you at the ground! 🙏`
+  );
+}
+
+
 export function buildWhatsAppLink(phone: string, message: string): string {
   const normalized = phone.replace(/[\s\-()]/g, "");
   const withPlus = normalized.startsWith("+") ? normalized : `+${normalized}`;
