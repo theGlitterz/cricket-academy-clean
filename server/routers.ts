@@ -48,6 +48,7 @@ import {
   getBookingsByWhatsApp,
   getFacility,
   getServiceBySlug,
+  getServiceById,
   getSlotsForDateRange,
   getSlotById,
   rejectBooking,
@@ -488,13 +489,36 @@ const bookingsRouter = router({
       const key = `payments/${booking.referenceId}-${Date.now()}.${ext}`;
       const { url } = await storagePut(key, buffer, input.mimeType);
 
-      await updateBookingScreenshot(input.bookingId, url);
+          await updateBookingScreenshot(input.bookingId, url);
       await confirmBookingPaid(input.bookingId);
-      // Notify owner that booking is confirmed
+
+      // Notify owner in app/admin
       notifyOwner({
         title: "Booking Confirmed",
         content: `${booking.playerName} has confirmed payment for booking ${booking.referenceId}. Slot is reserved.`,
       }).catch(() => {});
+
+      // Send WhatsApp to coach/sandbox recipients
+      try {
+        const service = await getServiceById(booking.serviceId);
+        const facility = await getFacility();
+
+        const message = buildCoachNewBookingAlert({
+          playerName: booking.playerName,
+          serviceName: service?.name ?? "Booking",
+          bookingDate: booking.bookingDate,
+          startTime: booking.startTime,
+          endTime: booking.endTime,
+          amount: Number(booking.amount),
+          referenceId: booking.referenceId,
+          facilityName: facility?.facilityName ?? "Facility",
+          coachWhatsApp: facility?.coachWhatsApp ?? "",
+        });
+
+        await sendCoachWhatsApp(message);
+      } catch (err) {
+        console.error("WhatsApp notification failed:", err);
+      }
 
       return { screenshotUrl: url };
  }),
