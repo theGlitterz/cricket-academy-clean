@@ -33,6 +33,7 @@ import {
   FACILITY_ID,
   cancelBooking,
   confirmBooking,
+  confirmBookingPaid,
   createBooking,
   createSlot,
   getAllBookings,
