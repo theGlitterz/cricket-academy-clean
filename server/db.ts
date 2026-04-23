@@ -298,18 +298,20 @@ export async function createSlot(data: InsertSlot): Promise<number> {
   // Two intervals [A_start, A_end) and [B_start, B_end) overlap when:
   //   A_start < B_end  AND  A_end > B_start
   // Using text comparison is safe because times are stored as HH:MM (zero-padded).
-  const overlapping = await db
+   const overlapping = await db
     .select({ id: slots.id, startTime: slots.startTime, endTime: slots.endTime })
     .from(slots)
     .where(
       and(
         eq(slots.facilityId, facilityId),
+        eq(slots.serviceId, data.serviceId),
         eq(slots.date, data.date),
         sql`${slots.startTime} < ${data.endTime}`,
         sql`${slots.endTime} > ${data.startTime}`
       )
     )
     .limit(1);
+
   if (overlapping.length > 0) {
     const clash = overlapping[0]!;
     throw new Error(
