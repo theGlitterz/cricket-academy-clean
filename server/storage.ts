@@ -12,7 +12,7 @@
  * Get free credentials at: https://cloudinary.com (free tier: 25 GB storage)
  */
 
-import { createHash, createHmac } from "crypto";
+import { createHash } from "crypto";
 import { ENV } from "./_core/env";
 
 /**
@@ -51,9 +51,9 @@ export async function storagePut(
   // Build signed upload parameters
   const timestamp = Math.floor(Date.now() / 1000);
   const paramsToSign = `public_id=${publicId}&timestamp=${timestamp}`;
-  const signature = createHmac("sha256", cloudinaryApiSecret)
-    .update(paramsToSign)
-    .digest("hex");
+  const signature = createHash("sha1")
+  .update(paramsToSign + cloudinaryApiSecret)
+  .digest("hex");
 
   // POST to Cloudinary Upload API
   const formData = new FormData();
