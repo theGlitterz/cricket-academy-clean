@@ -292,15 +292,16 @@ export async function createSlot(data: InsertSlot): Promise<number> {
 export async function markSlotBooked(slotId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
+  // postgres-js driver returns updated rows only when .returning() is used.
+  // We return the id of the updated row to confirm exactly one row was changed.
   const result = await db
     .update(slots)
-    .set({ availabilityStatus: "booked", bookedCount: sql`${slots.bookedCount} + 1` })
-    .where(and(eq(slots.id, slotId), eq(slots.availabilityStatus, "available")));
-  // Neon/pg returns rowCount on update; check via re-fetch
-  const updated = result as unknown as { rowCount?: number } | unknown[];
-  if (Array.isArray(updated)) return updated.length > 0;
-  return (updated as { rowCount?: number }).rowCount !== 0;
+    .set({ availabilityStatus: "booked", bookedCount: sql`${slots.bookedCount} + 1`, updatedAt: new Date() })
+    .where(and(eq(slots.id, slotId), eq(slots.availabilityStatus, "available")))
+    .returning({ id: slots.id });
+  return result.length > 0;
 }
+
 
 /**
  * Revert a slot to available.
