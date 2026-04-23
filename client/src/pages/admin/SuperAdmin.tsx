@@ -195,20 +195,13 @@ function FacilityList({
 }: {
   facilities: { id: number; facilityName: string; coachName: string | null; address: string | null; isActive: boolean }[];
   loading: boolean;
-  onDeleted: () => void;
+  onDeleted?: () => void;
 }) {
   const [deletingId, setDeletingId] = useState<number | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
-
-  const deleteFacility = trpc.facility.delete.useMutation({
-    onSuccess: () => {
-      setDeletingId(null);
-      onDeleted();
-    },
-    onError: (err) => {
-      setDeletingId(null);
-      setDeleteError(err.message);
-    },
+  const deleteMutation = trpc.facility.delete.useMutation({
+    onSuccess: () => { toast.success("Facility deleted"); onDeleted?.(); },
+    onError: (err) => toast.error(err.message ?? "Failed to delete facility"),
+    onSettled: () => setDeletingId(null),
   });
 
   if (loading) {
@@ -219,55 +212,40 @@ function FacilityList({
     );
   }
   if (facilities.length === 0) {
-    return (
-      <p className="text-sm text-muted-foreground py-4 text-center">No facilities yet. Create one above.</p>
-    );
+    return <p className="text-sm text-muted-foreground py-4 text-center">No facilities yet. Create one above.</p>;
   }
   return (
     <div className="space-y-2">
-      {deleteError && (
-        <div className="flex items-start gap-2 p-3 rounded-xl bg-red-50 text-red-700 text-sm mb-2">
-          <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
-          <span>{deleteError}</span>
-          <button onClick={() => setDeleteError(null)} className="ml-auto text-red-400 hover:text-red-600">
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
       {facilities.map((f) => (
-        <div
-          key={f.id}
-          className="flex items-start justify-between p-3 rounded-xl border border-border bg-card"
-        >
-          <div>
-            <div className="flex items-center gap-2">
+        <div key={f.id} className="flex items-start justify-between p-3 rounded-xl border border-border bg-card gap-3">
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-sm text-foreground">{f.facilityName}</span>
               <Badge variant={f.isActive ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
                 {f.isActive ? "Active" : "Inactive"}
               </Badge>
+              <span className="text-xs font-mono text-muted-foreground">ID: {f.id}</span>
             </div>
             {f.coachName && <p className="text-xs text-muted-foreground mt-0.5">{f.coachName}</p>}
             {f.address && <p className="text-xs text-muted-foreground">{f.address}</p>}
           </div>
-          <div className="flex items-center gap-2 shrink-0 ml-3">
-            <span className="text-xs font-mono text-muted-foreground">ID: {f.id}</span>
-            {f.id !== 1 && (
+          <div className="flex items-center gap-1 shrink-0">
+            {f.id === 1 ? (
+              <span className="text-[10px] text-muted-foreground italic px-2">Primary</span>
+            ) : (
               <Button
                 size="sm"
-                variant="outline"
-                className="text-red-500 hover:text-red-700 hover:border-red-300 px-2"
+                variant="ghost"
+                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
                 disabled={deletingId === f.id}
                 onClick={() => {
-                  if (window.confirm(`Delete "${f.facilityName}"? This cannot be undone.`)) {
+                  if (confirm(`Delete "${f.facilityName}"? This cannot be undone.`)) {
                     setDeletingId(f.id);
-                    setDeleteError(null);
-                    deleteFacility.mutate({ id: f.id });
+                    deleteMutation.mutate({ id: f.id });
                   }
                 }}
               >
-                {deletingId === f.id
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  : <Trash2 className="w-3.5 h-3.5" />}
+                {deletingId === f.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
               </Button>
             )}
           </div>
@@ -276,6 +254,7 @@ function FacilityList({
     </div>
   );
 }
+
 
 
 export default function SuperAdmin() {
