@@ -502,8 +502,9 @@ function DetailsStep({
 function PaymentStep({ booking, facility, onPaymentUploaded }: {
   booking: BookingState;
   facility?: { upiId?: string | null; upiQrImageUrl?: string | null } | null;
-  onPaymentUploaded: ...
+  onPaymentUploaded: (bookingId: number, referenceId: string) => void;
 }) {
+
 
   const createBookingMutation = trpc.bookings.create.useMutation({
     onError: (err) => toast.error(err.message ?? "Failed to create booking. Please try again."),
