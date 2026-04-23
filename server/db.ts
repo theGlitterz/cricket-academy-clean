@@ -537,9 +537,10 @@ export async function confirmBookingPaid(bookingId: number): Promise<void> {
   if (!db) return;
   await db
     .update(bookings)
-    .set({ bookingStatus: "confirmed", paymentStatus: "paid", updatedAt: new Date() })
+    .set({ bookingStatus: "confirmed", paymentStatus: "confirmed", updatedAt: new Date() })
     .where(eq(bookings.id, bookingId));
 }
+
 
 /**
  * Admin: confirm a booking.
