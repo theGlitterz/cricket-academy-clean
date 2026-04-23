@@ -274,14 +274,61 @@ export async function getSlotById(id: number): Promise<Slot | undefined> {
 export async function createSlot(data: InsertSlot): Promise<number> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(slots).values({
-    ...data,
-    facilityId: data.facilityId ?? FACILITY_ID,
-    availabilityStatus: "available",
-  });
-  const inserted = result as unknown as { id: number }[];
-  return inserted[0]?.id ?? 0;
+  const facilityId = data.facilityId ?? FACILITY_ID;
+
+  // ── 1. Duplicate check: same facility + service + date + startTime ──────────
+  const duplicate = await db
+    .select({ id: slots.id })
+    .from(slots)
+    .where(
+      and(
+        eq(slots.facilityId, facilityId),
+        eq(slots.serviceId, data.serviceId),
+        eq(slots.date, data.date),
+        eq(slots.startTime, data.startTime)
+      )
+    )
+    .limit(1);
+  if (duplicate.length > 0) {
+    throw new Error(`A slot for this service already exists at ${data.startTime} on ${data.date}.`);
+  }
+
+  // ── 2. Overlap check: any existing slot for same facility+date whose time
+  //       window overlaps with the new slot's window ──────────────────────────
+  // Two intervals [A_start, A_end) and [B_start, B_end) overlap when:
+  //   A_start < B_end  AND  A_end > B_start
+  // Using text comparison is safe because times are stored as HH:MM (zero-padded).
+  const overlapping = await db
+    .select({ id: slots.id, startTime: slots.startTime, endTime: slots.endTime })
+    .from(slots)
+    .where(
+      and(
+        eq(slots.facilityId, facilityId),
+        eq(slots.date, data.date),
+        sql`${slots.start_time} < ${data.endTime}`,
+        sql`${slots.end_time} > ${data.startTime}`
+      )
+    )
+    .limit(1);
+  if (overlapping.length > 0) {
+    const clash = overlapping[0]!;
+    throw new Error(
+      `This slot (${data.startTime}–${data.endTime}) overlaps with an existing slot (${clash.startTime}–${clash.endTime}) on ${data.date}.`
+    );
+  }
+
+  // ── 3. Insert ──────────────────────────────────────────────────────────────
+  const result = await db
+    .insert(slots)
+    .values({
+      ...data,
+      facilityId,
+      availabilityStatus: "available",
+    })
+    .returning({ id: slots.id });
+  return result[0]?.id ?? 0;
 }
+
 
 /**
  * Mark a slot as booked.
@@ -293,15 +340,18 @@ export async function createSlot(data: InsertSlot): Promise<number> {
 export async function markSlotBooked(slotId: number): Promise<boolean> {
   const db = await getDb();
   if (!db) return false;
-  // postgres-js driver returns updated rows only when .returning() is used.
-  // We return the id of the updated row to confirm exactly one row was changed.
   const result = await db
     .update(slots)
-    .set({ availabilityStatus: "booked", bookedCount: sql`${slots.bookedCount} + 1`, updatedAt: new Date() })
+    .set({
+      availabilityStatus: "booked",
+      bookedCount: sql`${slots.bookedCount} + 1`,
+      updatedAt: new Date(),
+    })
     .where(and(eq(slots.id, slotId), eq(slots.availabilityStatus, "available")))
     .returning({ id: slots.id });
   return result.length > 0;
 }
+
 
 
 /**
