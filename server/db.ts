@@ -196,6 +196,7 @@ export async function getAvailableSlots(
   date: string,
   facilityId = FACILITY_ID
 ): Promise<Slot[]> {
+  await expireStaleBookings(); 
   const db = await getDb();
   if (!db) return [];
   return db
@@ -342,6 +343,39 @@ export function generateReferenceId(): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, "");
   const suffix = nanoid(6).toUpperCase();
   return `BCA-${date}-${suffix}`;
+}
+/**
+ * Release slots held by pending bookings with no screenshot uploaded
+ * after more than 10 minutes. Called lazily before slot availability queries.
+ */
+export async function expireStaleBookings(): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+  const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+  // Find stale pending bookings: no screenshot, created > 10 min ago
+  const stale = await db
+    .select({ id: bookings.id, slotId: bookings.slotId })
+    .from(bookings)
+    .where(
+      and(
+        eq(bookings.bookingStatus, "pending"),
+        eq(bookings.paymentStatus, "pending_review"),
+        sql`${bookings.screenshotUrl} IS NULL`,
+        sql`${bookings.createdAt} < ${tenMinutesAgo.toISOString()}`
+      )
+    );
+  if (stale.length === 0) return;
+  const staleIds = stale.map((b) => b.id);
+  const staleSlotIds = stale.map((b) => b.slotId);
+  // Cancel the stale bookings
+  await db
+    .update(bookings)
+    .set({ bookingStatus: "cancelled", updatedAt: new Date() })
+    .where(sql`${bookings.id} IN ${staleIds}`);
+  // Release the slots back to available
+  for (const slotId of staleSlotIds) {
+    await markSlotAvailable(slotId);
+  }
 }
 
 /**
