@@ -754,8 +754,29 @@ function PaymentStep({
 
 
 // ─── Step 5: Done ─────────────────────────────────────────────────────────────
-function DoneStep({ booking }: { booking: BookingState }) {
+function DoneStep({ booking, facility }: { booking: BookingState; facility?: { coachWhatsApp?: string | null; facilityName?: string | null } | null }) {
   const shareText = `I've booked a ${booking.serviceName} session at BestCricketAcademy on ${booking.slotDate} at ${booking.slotStart}. Reference: ${booking.referenceId}`;
+  const priceNum = parseFloat(booking.servicePrice ?? "0");
+  const advanceNum = parseFloat(booking.serviceAdvance ?? "0");
+  const remainingNum = priceNum - advanceNum;
+  const coachWaLink = facility?.coachWhatsApp
+    ? buildWhatsAppLink(
+        facility.coachWhatsApp,
+        buildPlayerToCoachMessage({
+          playerName: booking.playerName ?? "",
+          serviceName: booking.serviceName ?? "",
+          bookingDate: booking.slotDate ?? "",
+          startTime: booking.slotStart ?? "",
+          endTime: booking.slotEnd ?? "",
+          referenceId: booking.referenceId ?? "",
+          totalPrice: priceNum,
+          advancePaid: advanceNum,
+          remainingAtGround: remainingNum,
+          facilityName: facility?.facilityName ?? undefined,
+        })
+      )
+    : null;
+
 
   return (
     <div className="text-center py-4">
@@ -952,7 +973,7 @@ export default function BookingPage() {
         )}
 
 
-        {step === "done" && <DoneStep booking={booking} />}
+        {step === "done" && <DoneStep booking={booking} facility={facility} />}
       </main>
     </div>
   );
