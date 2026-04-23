@@ -155,8 +155,7 @@ function ServiceStep({
               <button
                 key={service.id}
                 onClick={() => {
-                  setSelected(service.id);
-                  setTimeout(() => onSelect({
+                    setTimeout(() => onSelect({
                     id: service.id,
                     slug: service.slug,
                     name: service.name,
@@ -164,6 +163,7 @@ function ServiceStep({
                     advance: String(service.advanceAmount ?? "0"),
                     duration: service.durationMinutes,
                   }), 120);
+
                 }}
                 className="w-full text-left"
               >
@@ -401,12 +401,35 @@ function DetailsStep({
             <span className="text-muted-foreground">Time</span>
             <span className="font-semibold text-foreground">{booking.slotStart} – {booking.slotEnd}</span>
           </div>
-          <div className="border-t border-border/50 pt-1.5 mt-1.5 flex justify-between">
-            <span className="text-sm font-semibold text-foreground">Amount</span>
-            <span className="text-base font-extrabold" style={{ color: "oklch(0.38 0.13 145)" }}>
-              ₹{priceNum.toLocaleString("en-IN")}
-            </span>
+                  <div className="border-t border-border/50 pt-1.5 mt-1.5 space-y-1.5">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Total Price</span>
+              <span className="font-semibold text-foreground">₹{priceNum.toLocaleString("en-IN")}</span>
+            </div>
+            {(() => {
+              const advance = parseFloat(booking.serviceAdvance ?? "0");
+              const remaining = priceNum - advance;
+              if (advance > 0) return (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Pay Now</span>
+                    <span className="font-extrabold" style={{ color: "oklch(0.38 0.13 145)" }}>₹{advance.toLocaleString("en-IN")}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Pay at Ground</span>
+                    <span className="font-semibold text-foreground">₹{remaining.toLocaleString("en-IN")}</span>
+                  </div>
+                </>
+              );
+              return (
+                <div className="flex justify-between text-sm">
+                  <span className="font-semibold text-foreground">Pay Now</span>
+                  <span className="font-extrabold" style={{ color: "oklch(0.38 0.13 145)" }}>₹{priceNum.toLocaleString("en-IN")}</span>
+                </div>
+              );
+            })()}
           </div>
+
         </div>
       </div>
 
