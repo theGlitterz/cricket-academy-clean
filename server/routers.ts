@@ -29,7 +29,6 @@ import {
   createFacility,
   createFacilityAdmin,
   getAllFacilities,
-  deleteFacility
 } from "./db";
 import bcrypt from "bcryptjs";
 import {
@@ -152,49 +151,7 @@ const authRouter = router({
     }),
 
 
-      // ── Fallback: env-based super admin (for first-time setup before seed) ──
-      if (!adminEmail || !adminPassword) {
-  throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
-}
-
-if (emailLower !== adminEmail.toLowerCase()) {
-  throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
-}
-      let passwordValid = false;
-      if (adminPassword.startsWith("$2")) {
-        passwordValid = await bcrypt.compare(input.password, adminPassword);
-      } else {
-        passwordValid = input.password === adminPassword;
-      }
-      if (!passwordValid) {
-        throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
-      }
-      // Ensure super_admin user record exists in DB
-      let user = await getUserByEmail(emailLower);
-      if (!user) {
-        const hash = await bcrypt.hash(input.password, 10);
-        await createUser({
-          email: emailLower,
-          passwordHash: hash,
-          name: "Admin",
-          role: "super_admin",
-        });
-        user = await getUserByEmail(emailLower);
-      }
-      if (!user) {
-        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to create user record" });
-      }
-      const token = await signSession({
-        userId: user.id,
-        email: user.email,
-        role: user.role,
-      });
-      const cookieOptions = getSessionCookieOptions(ctx.req);
-      ctx.res.cookie(COOKIE_NAME, token, cookieOptions);
-      touchUserSignIn(user.id).catch(() => {});
-      return { ok: true, user: { id: user.id, email: user.email, name: user.name, role: user.role } };
-    }),
-
+    
   /**
    * Public: logout — clears the session cookie.
    */
