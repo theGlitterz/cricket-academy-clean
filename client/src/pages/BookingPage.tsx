@@ -499,14 +499,11 @@ function DetailsStep({
 }
 
 // ─── Step 4: Payment ──────────────────────────────────────────────────────────
-function PaymentStep({
-  booking,
-  onPaymentUploaded,
-}: {
+function PaymentStep({ booking, facility, onPaymentUploaded }: {
   booking: BookingState;
-  onPaymentUploaded: (bookingId: number, referenceId: string) => void;
+  facility?: { upiId?: string | null; upiQrImageUrl?: string | null } | null;
+  onPaymentUploaded: ...
 }) {
-  const { data: facility } = trpc.facility.get.useQuery();
 
   const createBookingMutation = trpc.bookings.create.useMutation({
     onError: (err) => toast.error(err.message ?? "Failed to create booking. Please try again."),
@@ -878,6 +875,7 @@ export default function BookingPage() {
   const [booking, setBooking] = useState<BookingState>({ serviceSlug: params.serviceSlug });
 
   const { data: services } = trpc.services.list.useQuery();
+  const { data: facility } = trpc.facility.get.useQuery();
 
   // Pre-load service from URL slug
   useEffect(() => {
@@ -974,6 +972,7 @@ export default function BookingPage() {
           {step === "payment" && (
           <PaymentStep
             booking={booking}
+            facility={facility}
             onPaymentUploaded={(bookingId, referenceId) => {
               setBooking((prev) => ({ ...prev, bookingId, referenceId }));
               setStep("done");
