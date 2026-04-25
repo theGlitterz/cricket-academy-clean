@@ -25,6 +25,12 @@ import {
   ImageIcon,
   X,
 } from "lucide-react";
+// Razorpay Checkout is loaded via <script> in index.html
+declare global {
+  interface Window {
+    Razorpay: new (options: Record<string, unknown>) => { open(): void };
+  }
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = "service" | "slot" | "details" | "payment" | "done";
@@ -499,27 +505,33 @@ function DetailsStep({
 }
 
 // ─── Step 4: Payment ──────────────────────────────────────────────────────────
-function PaymentStep({ booking, facility, onPaymentUploaded }: {
+function PaymentStep({
+  booking,
+  onPaymentUploaded,
+}: {
   booking: BookingState;
-  facility?: { upiId?: string | null; upiQrImageUrl?: string | null } | null;
-  onPaymentUploaded: (bookingId: number, referenceId: string) => void;
+  onPaymentUploaded: () => void;
 }) {
+  const { data: facility } = trpc.facility.get.useQuery();
+  const [rzpLoading, setRzpLoading] = useState(false);
 
-
-  const createBookingMutation = trpc.bookings.create.useMutation({
-    onError: (err) => toast.error(err.message ?? "Failed to create booking. Please try again."),
+  const createOrderMutation = trpc.payments.createOrder.useMutation({
+    onError: (err) => {
+      toast.error(err.message ?? "Failed to create payment order. Please try again.");
+      setRzpLoading(false);
+    },
   });
 
+  // ── Screenshot fallback (hidden — kept for manual override) ──────────────
   const uploadMutation = trpc.bookings.uploadPayment.useMutation({
-    onSuccess: () => { toast.success("Payment screenshot uploaded!"); },
+    onSuccess: () => { toast.success("Payment screenshot uploaded!"); onPaymentUploaded(); },
     onError: (err) => toast.error(err.message),
   });
-
-
   const [preview, setPreview] = useState<string | null>(null);
   const [fileBase64, setFileBase64] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState("image/jpeg");
   const fileRef = useRef<HTMLInputElement>(null);
+  const [showFallback, setShowFallback] = useState(false);
 
   const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -536,46 +548,73 @@ function PaymentStep({ booking, facility, onPaymentUploaded }: {
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = async () => {
+  const handleScreenshotSubmit = () => {
     if (!fileBase64) { toast.error("Please upload your payment screenshot first"); return; }
-    if (!booking.slotId || !booking.serviceId || !booking.playerName || !booking.playerWhatsApp) {
-      toast.error("Booking details missing. Please go back and try again.");
+    if (!booking.bookingId) { toast.error("Booking ID not found. Please restart."); return; }
+    uploadMutation.mutate({ bookingId: booking.bookingId!, fileBase64, mimeType });
+  };
+  // ─────────────────────────────────────────────────────────────────────────
+
+  const priceNum = parseFloat(booking.servicePrice ?? "0");
+
+  const handlePayAdvance = async () => {
+    if (!booking.serviceId || !booking.slotId) {
+      toast.error("Service or slot information is missing. Please restart.");
       return;
     }
-    try {
-      const result = await createBookingMutation.mutateAsync({
-        slotId: booking.slotId,
-        serviceId: booking.serviceId,
-        playerName: booking.playerName,
-        playerWhatsApp: booking.playerWhatsApp,
-      });
-      await uploadMutation.mutateAsync({
-        bookingId: result.id,
-        fileBase64,
-        mimeType,
-      });
-      onPaymentUploaded(result.id, result.referenceId);
-    } catch {
-      // errors already shown via onError handlers above
+    if (!window.Razorpay) {
+      toast.error("Payment SDK not loaded. Please refresh the page and try again.");
+      return;
     }
-  };
 
+    setRzpLoading(true);
+    try {
+      const order = await createOrderMutation.mutateAsync({
+        serviceId: booking.serviceId,
+        slotId: booking.slotId,
+      });
 
-  const totalPrice = parseFloat(booking.servicePrice ?? "0");
-  const advanceAmount = parseFloat(booking.serviceAdvance ?? "0");
-  const remainingAmount = totalPrice - advanceAmount;
-  const payNow = advanceAmount > 0 ? advanceAmount : totalPrice;
-  const hasAdvance = advanceAmount > 0 && advanceAmount < totalPrice;
+      const options: Record<string, unknown> = {
+        key: import.meta.env.VITE_RAZORPAY_KEY_ID as string,
+        amount: order.amount,
+        currency: order.currency,
+        order_id: order.orderId,
+        name: "BestCricketAcademy",
+        description: booking.serviceName ?? "Cricket Session Advance",
+        prefill: {
+          name: booking.playerName ?? "",
+          contact: booking.playerWhatsApp ?? "",
+        },
+        theme: { color: "#1a4d2e" },
+        handler: (response: {
+          razorpay_payment_id: string;
+          razorpay_order_id: string;
+          razorpay_signature: string;
+        }) => {
+          // TODO: send to backend for signature verification before confirming booking
+          console.log("Razorpay payment success:", {
+            razorpay_payment_id: response.razorpay_payment_id,
+            razorpay_order_id: response.razorpay_order_id,
+            razorpay_signature: response.razorpay_signature,
+          });
+          toast.success("Payment received! Your booking is under review.");
+          onPaymentUploaded();
+        },
+        modal: {
+          ondismiss: () => {
+            setRzpLoading(false);
+            toast("Payment cancelled. You can try again.");
+          },
+        },
+      };
 
-  const upiId = facility?.upiId ?? "bestcricket@upi";
-  const qrUrl = facility?.upiQrImageUrl;
-
-  const copyUpi = () => {
-    navigator.clipboard.writeText(upiId).then(() => toast.success("UPI ID copied!"));
-  };
-
-  const copyAmount = () => {
-    navigator.clipboard.writeText(String(payNow)).then(() => toast.success("Amount copied!"));
+      const rzp = new window.Razorpay(options);
+      rzp.open();
+      // Loading state is cleared by handler or ondismiss
+    } catch {
+      // error already handled by onError above
+      setRzpLoading(false);
+    }
   };
 
   return (
@@ -584,168 +623,120 @@ function PaymentStep({ booking, facility, onPaymentUploaded }: {
         <h1 className="text-2xl font-extrabold text-foreground leading-tight" style={{ fontFamily: "Syne, sans-serif" }}>
           Complete Payment
         </h1>
-        <p className="text-sm text-muted-foreground mt-1">Pay via UPI and upload your screenshot</p>
+        <p className="text-sm text-muted-foreground mt-1">Pay the advance to confirm your slot</p>
       </div>
 
       {/* Amount Banner */}
       <div
-        className="rounded-2xl p-4 mb-5"
+        className="rounded-2xl p-4 mb-5 flex items-center justify-between"
         style={{ background: "linear-gradient(135deg, oklch(0.22 0.08 145), oklch(0.32 0.12 145))" }}
       >
-        <div className="flex items-center justify-between mb-3">
-          <div>
-            <p className="text-xs text-white/70 font-medium">{hasAdvance ? "Advance to Pay Now" : "Amount to Pay"}</p>
-            <p className="text-3xl font-extrabold text-white mt-0.5" style={{ fontFamily: "Syne, sans-serif" }}>
-              ₹{payNow.toLocaleString("en-IN")}
-            </p>
-            <p className="text-xs text-white/60 mt-0.5">{booking.serviceName}</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-white/70">
-              {booking.slotDate && new Date(booking.slotDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
-            </p>
-            <p className="text-sm font-semibold text-white mt-0.5">{booking.slotStart} – {booking.slotEnd}</p>
-          </div>
+        <div>
+          <p className="text-xs text-white/70 font-medium">Advance to Pay</p>
+          <p className="text-3xl font-extrabold text-white mt-0.5" style={{ fontFamily: "Syne, sans-serif" }}>
+            ₹{priceNum.toLocaleString("en-IN")}
+          </p>
+          <p className="text-xs text-white/60 mt-0.5">{booking.serviceName}</p>
         </div>
-
-        {hasAdvance && (
-          <div className="border-t border-white/20 pt-3 space-y-1.5">
-            <div className="flex justify-between text-xs text-white/80">
-              <span>Total price</span>
-              <span className="font-semibold">₹{totalPrice.toLocaleString("en-IN")}</span>
-            </div>
-            <div className="flex justify-between text-xs text-white/80">
-              <span>Pay now (advance)</span>
-              <span className="font-semibold text-white">₹{advanceAmount.toLocaleString("en-IN")}</span>
-            </div>
-            <div className="flex justify-between text-xs text-white/80">
-              <span>Pay at ground</span>
-              <span className="font-semibold">₹{remainingAmount.toLocaleString("en-IN")}</span>
-            </div>
-          </div>
-        )}
+        <div className="text-right">
+          <p className="text-xs text-white/60">Booking</p>
+          <p className="text-sm font-bold text-white mt-0.5 font-mono">{booking.referenceId}</p>
+        </div>
       </div>
 
-      {/* UPI Section */}
-      <div className="bg-white border border-border rounded-2xl p-4 mb-4">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Pay via UPI</p>
-
-        {qrUrl ? (
-          <div className="flex justify-center mb-4">
-            <div className="p-3 border-2 border-border rounded-2xl bg-white">
-              <img src={qrUrl} alt="UPI QR Code" className="w-44 h-44 object-contain" />
-            </div>
-          </div>
-        ) : (
-          <div className="flex justify-center mb-4">
-            <div className="w-44 h-44 border-2 border-dashed border-border rounded-2xl flex flex-col items-center justify-center text-muted-foreground bg-muted/30">
-              <ImageIcon className="w-8 h-8 mb-2 opacity-40" />
-              <p className="text-xs text-center px-4">QR code not configured yet</p>
-            </div>
-          </div>
-        )}
-
-        <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-3 mb-2">
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">UPI ID</p>
-            <p className="text-sm font-bold text-foreground mt-0.5 truncate">{upiId}</p>
-          </div>
-          <button
-            onClick={copyUpi}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
-            style={{ color: "oklch(0.38 0.13 145)" }}
-          >
-            <Copy className="w-3.5 h-3.5" /> Copy UPI
-          </button>
-        </div>
-
-        <div className="flex items-center gap-2 bg-muted/50 rounded-xl p-3">
-          <div className="flex-1 min-w-0">
-            <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Amount</p>
-            <p className="text-sm font-bold text-foreground mt-0.5">₹{payNow.toLocaleString("en-IN")}</p>
-          </div>
-          <button
-            onClick={copyAmount}
-            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
-            style={{ color: "oklch(0.38 0.13 145)" }}
-          >
-            <Copy className="w-3.5 h-3.5" /> Copy Amount
-          </button>
-        </div>
-
-        <p className="text-xs text-muted-foreground mt-3 text-center">Scan QR or copy UPI ID to pay</p>
-      </div>
-
-      {/* Screenshot Upload */}
-      <div className="bg-white border border-border rounded-2xl p-4 mb-4">
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-          Upload Payment Screenshot <span className="text-destructive">*</span>
-        </p>
-
-        {preview ? (
-          <div className="relative">
-            <img src={preview} alt="Payment screenshot" className="w-full rounded-xl object-contain max-h-64 border border-border" />
-            <button
-              onClick={() => { setPreview(null); setFileBase64(null); if (fileRef.current) fileRef.current.value = ""; }}
-              className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-            <div className="mt-2 flex items-center gap-1.5">
-              <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-              <span className="text-xs font-medium text-emerald-700">Screenshot ready to submit</span>
-            </div>
-          </div>
-        ) : (
-          <button
-            onClick={() => fileRef.current?.click()}
-            className="w-full border-2 border-dashed border-border rounded-xl py-8 flex flex-col items-center gap-2 hover:border-primary/40 hover:bg-primary/5 transition-all active:scale-[0.98]"
-          >
-            <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Upload className="w-5 h-5 text-primary" />
-            </div>
-            <div className="text-center">
-              <p className="text-sm font-semibold text-foreground">Tap to upload screenshot</p>
-              <p className="text-xs text-muted-foreground mt-0.5">JPG, PNG — max 5 MB</p>
-            </div>
-          </button>
-        )}
-        <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
-      </div>
+      {/* Razorpay Pay Button */}
+      <Button
+        size="lg"
+        onClick={handlePayAdvance}
+        disabled={rzpLoading || createOrderMutation.isPending}
+        className="w-full h-12 rounded-xl text-base font-semibold mb-4"
+        style={{ background: "oklch(0.38 0.13 145)", color: "white" }}
+      >
+        {rzpLoading || createOrderMutation.isPending ? (
+          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Opening Payment…</>
+        ) : "Pay Advance"}
+      </Button>
 
       {/* Instructions */}
       <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-5">
-        <p className="text-xs font-semibold text-amber-800 mb-1.5">Important Instructions</p>
+        <p className="text-xs font-semibold text-amber-800 mb-1.5">Important</p>
         <ul className="text-xs text-amber-700 space-y-1">
-          {hasAdvance ? (
-            <>
-              <li>• Pay the advance amount of ₹{advanceAmount.toLocaleString("en-IN")} now via UPI</li>
-              <li>• Remaining ₹{remainingAmount.toLocaleString("en-IN")} is payable at the ground</li>
-            </>
-          ) : (
-            <li>• Pay the exact amount of ₹{payNow.toLocaleString("en-IN")} shown above</li>
-          )}
-          <li>• Take a screenshot of the payment confirmation</li>
-          <li>• Upload the screenshot using the button above</li>
-          <li>• Your booking is confirmed automatically after screenshot upload</li>
+          <li>• Pay the advance to lock your slot</li>
+          <li>• Your booking is confirmed once the coach reviews it</li>
+          <li>• You will receive a WhatsApp confirmation</li>
         </ul>
       </div>
 
-      <Button
-        size="lg"
-        onClick={handleSubmit}
-        disabled={!fileBase64 || createBookingMutation.isPending || uploadMutation.isPending}
-        className="w-full h-12 rounded-xl text-base font-semibold"
-        style={{ background: "oklch(0.38 0.13 145)", color: "white" }}
-      >
-        {(createBookingMutation.isPending || uploadMutation.isPending) ? (
-          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting…</>
-        ) : "Submit Booking Request"}
-      </Button>
+      {/* Screenshot fallback (hidden by default) */}
+      {showFallback ? (
+        <div className="border border-border rounded-2xl p-4 mt-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
+            Upload Payment Screenshot (Fallback) <span className="text-destructive">*</span>
+          </p>
+          {preview ? (
+            <div className="relative">
+              <img src={preview} alt="Payment screenshot" className="w-full rounded-xl object-contain max-h-64 border border-border" />
+              <button
+                onClick={() => { setPreview(null); setFileBase64(null); if (fileRef.current) fileRef.current.value = ""; }}
+                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+              <div className="mt-2 flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                <span className="text-xs font-medium text-emerald-700">Screenshot ready to submit</span>
+              </div>
+            </div>
+          ) : (
+            <button
+              onClick={() => fileRef.current?.click()}
+              className="w-full border-2 border-dashed border-border rounded-xl py-8 flex flex-col items-center gap-2 hover:border-primary/40 hover:bg-primary/5 transition-all"
+            >
+              <Upload className="w-5 h-5 text-primary" />
+              <p className="text-sm font-semibold text-foreground">Tap to upload screenshot</p>
+              <p className="text-xs text-muted-foreground">JPG, PNG — max 5 MB</p>
+            </button>
+          )}
+          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
+          <Button
+            size="lg"
+            onClick={handleScreenshotSubmit}
+            disabled={!fileBase64 || uploadMutation.isPending}
+            className="w-full h-12 rounded-xl text-base font-semibold mt-3"
+            style={{ background: "oklch(0.38 0.13 145)", color: "white" }}
+          >
+            {uploadMutation.isPending ? (
+              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting…</>
+            ) : "Submit Screenshot"}
+          </Button>
+        </div>
+      ) : (
+        <button
+          onClick={() => setShowFallback(true)}
+          className="w-full text-xs text-muted-foreground underline underline-offset-2 mt-1 text-center"
+        >
+          Having trouble? Pay via UPI and upload screenshot instead
+        </button>
+      )}
 
-
-      {!fileBase64 && (
-        <p className="text-xs text-center text-muted-foreground mt-2">Upload your payment screenshot to continue</p>
+      {/* UPI details (shown only in fallback mode) */}
+      {showFallback && (
+        <div className="bg-muted/40 border border-border rounded-2xl p-4 mt-4">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Pay via UPI</p>
+          <div className="flex items-center gap-2 bg-white rounded-xl p-3">
+            <div className="flex-1 min-w-0">
+              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">UPI ID</p>
+              <p className="text-sm font-bold text-foreground mt-0.5 truncate">{facility?.upiId ?? "bestcricket@upi"}</p>
+            </div>
+            <button
+              onClick={() => navigator.clipboard.writeText(facility?.upiId ?? "bestcricket@upi").then(() => toast.success("UPI ID copied!"))}
+              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
+              style={{ color: "oklch(0.38 0.13 145)" }}
+            >
+              <Copy className="w-3.5 h-3.5" /> Copy
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );
