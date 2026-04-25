@@ -771,7 +771,8 @@ export const appRouter = router({
   slots: slotsRouter,
   bookings: bookingsRouter,
   superAdmin: superAdminRouter,
-
+  payments: paymentsRouter,
 });
+
 
 export type AppRouter = typeof appRouter;
