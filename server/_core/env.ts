@@ -15,6 +15,8 @@ export const ENV = {
   cloudinaryApiKey: process.env.CLOUDINARY_API_KEY ?? "",
   cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET ?? "",
   isProduction: process.env.NODE_ENV === "production",
+  razorpayKeyId: process.env.RAZORPAY_KEY_ID ?? "",
+  razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET ?? "",
 };
 
 // ─── Legacy Manus template fields (unused in self-hosted deployment) ──────────
