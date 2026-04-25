@@ -643,6 +643,98 @@ const bookingsRouter = router({
       return { success: true };
     }),
 });
+// ─── Payments router ─────────────────────────────────────────────────────────
+
+import Razorpay from "razorpay";
+
+function getRazorpay() {
+  const keyId = ENV.razorpayKeyId;
+  const keySecret = ENV.razorpayKeySecret;
+  if (!keyId || !keySecret) {
+    throw new TRPCError({
+      code: "INTERNAL_SERVER_ERROR",
+      message: "Razorpay credentials are not configured on this server.",
+    });
+  }
+  return new Razorpay({ key_id: keyId, key_secret: keySecret });
+}
+
+const paymentsRouter = router({
+  /**
+   * Public: create a Razorpay order for the advance amount of a service.
+   *
+   * Input:  serviceId, slotId
+   * Output: orderId, amount (paise), currency
+   *
+   * Does NOT create a booking. Booking is created separately after
+   * payment is verified.
+   */
+  createOrder: publicProcedure
+    .input(
+      z.object({
+        serviceId: z.number().int(),
+        slotId: z.number().int(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      // 1. Validate service exists
+      const service = await getServiceById(input.serviceId);
+      if (!service) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Service not found" });
+      }
+
+      // 2. Validate slot exists and is still available
+      const slot = await getSlotById(input.slotId);
+      if (!slot) {
+        throw new TRPCError({ code: "NOT_FOUND", message: "Slot not found" });
+      }
+      if (slot.availabilityStatus !== "available") {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: "This slot is no longer available.",
+        });
+      }
+
+      // 3. Calculate advance amount
+      // advanceAmount column: INR decimal string e.g. "500.00"
+      // Falls back to full price if advanceAmount is missing or 0
+      const advanceRaw =
+        (service as { advanceAmount?: string | null }).advanceAmount;
+      const advanceInr = advanceRaw && Number(advanceRaw) > 0
+        ? Number(advanceRaw)
+        : Number(service.price);
+
+      // Razorpay requires amount in smallest currency unit (paise)
+      const amountPaise = Math.round(advanceInr * 100);
+
+      if (amountPaise <= 0) {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Advance amount must be greater than zero.",
+        });
+      }
+
+      // 4. Create Razorpay order
+      const rzp = getRazorpay();
+      const receipt = `adv-${input.slotId}-${Date.now()}`.slice(0, 40);
+      const order = await rzp.orders.create({
+        amount: amountPaise,
+        currency: "INR",
+        receipt,
+        notes: {
+          serviceId: String(input.serviceId),
+          slotId: String(input.slotId),
+          serviceName: service.name,
+        },
+      });
+
+      return {
+        orderId: order.id,
+        amount: order.amount,       // paise
+        currency: order.currency,   // "INR"
+      };
+    }),
+});
 
 // ─── App router ───────────────────────────────────────────────────────────────
 const superAdminRouter = router({
