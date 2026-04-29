@@ -661,7 +661,7 @@ function PaymentStep({
           <li>• Pay the remaining ₹{remainingAmount.toLocaleString("en-IN")} at the ground</li>
         </ul>
       </div>
-      <p className="text-xs text-center text-muted-foreground">🔒 Secure payment powered by Razorpay</p>
-    </div>
-  );
+     </div>
+);
 }
+
