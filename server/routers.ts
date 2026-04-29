@@ -668,8 +668,8 @@ const paymentsRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const keyId = env.razorpayKeyId;
-      const keySecret = env.razorpayKeySecret;
+      const keyId = ENV.razorpayKeyId;
+      const keySecret = ENV.razorpayKeySecret;
       if (!keyId || !keySecret) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Razorpay credentials are not configured" });
       }
@@ -735,7 +735,7 @@ const paymentsRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const keySecret = env.razorpayKeySecret;
+      const keySecret = ENV.razorpayKeySecret;
       if (!keySecret) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Razorpay not configured." });
       }
