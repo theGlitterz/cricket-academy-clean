@@ -17,14 +17,11 @@ import {
   Clock,
   CalendarDays,
   CheckCircle2,
-  Upload,
-  Copy,
   Loader2,
   ChevronRight,
   AlertCircle,
-  ImageIcon,
-  X,
 } from "lucide-react";
+
 // Razorpay Checkout is loaded via <script> in index.html
 declare global {
   interface Window {
@@ -522,40 +519,11 @@ function PaymentStep({
     },
   });
 
-  // ── Screenshot fallback (hidden — kept for manual override) ──────────────
-  const uploadMutation = trpc.bookings.uploadPayment.useMutation({
-    onSuccess: () => { toast.success("Payment screenshot uploaded!"); onPaymentUploaded(); },
-    onError: (err) => toast.error(err.message),
-  });
-  const [preview, setPreview] = useState<string | null>(null);
-  const [fileBase64, setFileBase64] = useState<string | null>(null);
-  const [mimeType, setMimeType] = useState("image/jpeg");
-  const fileRef = useRef<HTMLInputElement>(null);
-  const [showFallback, setShowFallback] = useState(false);
-
-  const handleFile = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) { toast.error("Please upload an image file"); return; }
-    if (file.size > 5 * 1024 * 1024) { toast.error("Image must be under 5 MB"); return; }
-    setMimeType(file.type);
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const result = ev.target?.result as string;
-      setPreview(result);
-      setFileBase64(result.split(",")[1] ?? null);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const handleScreenshotSubmit = () => {
-    if (!fileBase64) { toast.error("Please upload your payment screenshot first"); return; }
-    if (!booking.bookingId) { toast.error("Booking ID not found. Please restart."); return; }
-    uploadMutation.mutate({ bookingId: booking.bookingId!, fileBase64, mimeType });
-  };
   // ─────────────────────────────────────────────────────────────────────────
 
-  const priceNum = parseFloat(booking.servicePrice ?? "0");
+  const totalPrice = parseFloat(booking.servicePrice ?? "0");
+  const advanceAmount = parseFloat(booking.serviceAdvance ?? "0");
+  const remainingAmount = Math.max(0, totalPrice - advanceAmount);
 
   const handlePayAdvance = async () => {
     if (!booking.serviceId || !booking.slotId) {
@@ -626,23 +594,38 @@ function PaymentStep({
         <p className="text-sm text-muted-foreground mt-1">Pay the advance to confirm your slot</p>
       </div>
 
-      {/* Amount Banner */}
+        {/* Amount Banner */}
       <div
-        className="rounded-2xl p-4 mb-5 flex items-center justify-between"
+        className="rounded-2xl p-4 mb-5"
         style={{ background: "linear-gradient(135deg, oklch(0.22 0.08 145), oklch(0.32 0.12 145))" }}
       >
-        <div>
-          <p className="text-xs text-white/70 font-medium">Advance to Pay</p>
-          <p className="text-3xl font-extrabold text-white mt-0.5" style={{ fontFamily: "Syne, sans-serif" }}>
-            ₹{priceNum.toLocaleString("en-IN")}
-          </p>
-          <p className="text-xs text-white/60 mt-0.5">{booking.serviceName}</p>
+        <div className="flex items-start justify-between mb-3">
+          <div>
+            <p className="text-xs text-white/70 font-medium">Advance to Pay Now</p>
+            <p className="text-3xl font-extrabold text-white mt-0.5" style={{ fontFamily: "Syne, sans-serif" }}>
+              ₹{advanceAmount.toLocaleString("en-IN")}
+            </p>
+            <p className="text-xs text-white/60 mt-0.5">{booking.serviceName}</p>
+          </div>
+          <div className="text-right">
+            <p className="text-xs text-white/60">
+              {booking.slotDate && new Date(booking.slotDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
+            </p>
+            <p className="text-sm font-semibold text-white mt-0.5">{booking.slotStart} – {booking.slotEnd}</p>
+          </div>
         </div>
-        <div className="text-right">
-          <p className="text-xs text-white/60">Booking</p>
-          <p className="text-sm font-bold text-white mt-0.5 font-mono">{booking.referenceId}</p>
+        <div className="border-t border-white/20 pt-3 flex gap-6">
+          <div>
+            <p className="text-[10px] text-white/50 uppercase tracking-wider">Total Price</p>
+            <p className="text-sm font-semibold text-white/90">₹{totalPrice.toLocaleString("en-IN")}</p>
+          </div>
+          <div>
+            <p className="text-[10px] text-white/50 uppercase tracking-wider">Remaining at Ground</p>
+            <p className="text-sm font-semibold text-white/90">₹{remainingAmount.toLocaleString("en-IN")}</p>
+          </div>
         </div>
       </div>
+
 
       {/* Razorpay Pay Button */}
       <Button
@@ -662,85 +645,11 @@ function PaymentStep({
         <p className="text-xs font-semibold text-amber-800 mb-1.5">Important</p>
         <ul className="text-xs text-amber-700 space-y-1">
           <li>• Pay the advance to lock your slot</li>
-          <li>• Your booking is confirmed once the coach reviews it</li>
+          <li>• Your booking is confirmed instantly after successful payment</li>
+          <li>• Pay the remaining ₹{remainingAmount.toLocaleString("en-IN")} at the ground</li>
           <li>• You will receive a WhatsApp confirmation</li>
         </ul>
       </div>
-
-      {/* Screenshot fallback (hidden by default) */}
-      {showFallback ? (
-        <div className="border border-border rounded-2xl p-4 mt-4">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">
-            Upload Payment Screenshot (Fallback) <span className="text-destructive">*</span>
-          </p>
-          {preview ? (
-            <div className="relative">
-              <img src={preview} alt="Payment screenshot" className="w-full rounded-xl object-contain max-h-64 border border-border" />
-              <button
-                onClick={() => { setPreview(null); setFileBase64(null); if (fileRef.current) fileRef.current.value = ""; }}
-                className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/60 text-white flex items-center justify-center hover:bg-black/80 transition-colors"
-              >
-                <X className="w-3.5 h-3.5" />
-              </button>
-              <div className="mt-2 flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                <span className="text-xs font-medium text-emerald-700">Screenshot ready to submit</span>
-              </div>
-            </div>
-          ) : (
-            <button
-              onClick={() => fileRef.current?.click()}
-              className="w-full border-2 border-dashed border-border rounded-xl py-8 flex flex-col items-center gap-2 hover:border-primary/40 hover:bg-primary/5 transition-all"
-            >
-              <Upload className="w-5 h-5 text-primary" />
-              <p className="text-sm font-semibold text-foreground">Tap to upload screenshot</p>
-              <p className="text-xs text-muted-foreground">JPG, PNG — max 5 MB</p>
-            </button>
-          )}
-          <input ref={fileRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleFile} />
-          <Button
-            size="lg"
-            onClick={handleScreenshotSubmit}
-            disabled={!fileBase64 || uploadMutation.isPending}
-            className="w-full h-12 rounded-xl text-base font-semibold mt-3"
-            style={{ background: "oklch(0.38 0.13 145)", color: "white" }}
-          >
-            {uploadMutation.isPending ? (
-              <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Submitting…</>
-            ) : "Submit Screenshot"}
-          </Button>
-        </div>
-      ) : (
-        <button
-          onClick={() => setShowFallback(true)}
-          className="w-full text-xs text-muted-foreground underline underline-offset-2 mt-1 text-center"
-        >
-          Having trouble? Pay via UPI and upload screenshot instead
-        </button>
-      )}
-
-      {/* UPI details (shown only in fallback mode) */}
-      {showFallback && (
-        <div className="bg-muted/40 border border-border rounded-2xl p-4 mt-4">
-          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Pay via UPI</p>
-          <div className="flex items-center gap-2 bg-white rounded-xl p-3">
-            <div className="flex-1 min-w-0">
-              <p className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">UPI ID</p>
-              <p className="text-sm font-bold text-foreground mt-0.5 truncate">{facility?.upiId ?? "bestcricket@upi"}</p>
-            </div>
-            <button
-              onClick={() => navigator.clipboard.writeText(facility?.upiId ?? "bestcricket@upi").then(() => toast.success("UPI ID copied!"))}
-              className="flex items-center gap-1.5 text-xs font-semibold px-3 py-2 rounded-lg border border-border hover:bg-muted transition-colors shrink-0"
-              style={{ color: "oklch(0.38 0.13 145)" }}
-            >
-              <Copy className="w-3.5 h-3.5" /> Copy
-            </button>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
 
 
 // ─── Step 5: Done ─────────────────────────────────────────────────────────────
