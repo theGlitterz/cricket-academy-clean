@@ -1,9 +1,3 @@
-
-## FILE — `server/services/whatsappSender.ts`
-
-**Replace the entire file with:**
-
-```ts
 /**
  * Twilio WhatsApp Sender
  *
