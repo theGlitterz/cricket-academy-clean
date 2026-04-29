@@ -645,7 +645,6 @@ const bookingsRouter = router({
 });
 // ─── Payments router ─────────────────────────────────────────────────────────
 
-import Razorpay from "razorpay";
 import { validatePaymentVerification } from "razorpay/dist/utils/razorpay-utils";
 
 function getRazorpay() {
@@ -661,15 +660,6 @@ function getRazorpay() {
 }
 
 const paymentsRouter = router({
-  /**
-   * Public: create a Razorpay order for the advance amount of a service.
-   *
-   * Input:  serviceId, slotId
-   * Output: orderId, amount (paise), currency
-   *
-   * Does NOT create a booking. Booking is created separately after
-   * payment is verified.
-   */
   createOrder: publicProcedure
     .input(
       z.object({
@@ -678,74 +668,59 @@ const paymentsRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      // 1. Validate service exists
+      const keyId = env.razorpayKeyId;
+      const keySecret = env.razorpayKeySecret;
+      if (!keyId || !keySecret) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Razorpay credentials are not configured" });
+      }
+
       const service = await getServiceById(input.serviceId);
-      if (!service) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Service not found" });
-      }
+      if (!service) throw new TRPCError({ code: "NOT_FOUND", message: "Service not found" });
 
-      // 2. Validate slot exists and is still available
       const slot = await getSlotById(input.slotId);
-      if (!slot) {
-        throw new TRPCError({ code: "NOT_FOUND", message: "Slot not found" });
-      }
+      if (!slot) throw new TRPCError({ code: "NOT_FOUND", message: "Slot not found" });
       if (slot.availabilityStatus !== "available") {
-        throw new TRPCError({
-          code: "CONFLICT",
-          message: "This slot is no longer available.",
-        });
+        throw new TRPCError({ code: "CONFLICT", message: "This slot is no longer available." });
       }
 
-      // 3. Calculate advance amount
-      // advanceAmount column: INR decimal string e.g. "500.00"
-      // Falls back to full price if advanceAmount is missing or 0
-      const advanceRaw =
-        (service as { advanceAmount?: string | null }).advanceAmount;
-      const advanceInr = advanceRaw && Number(advanceRaw) > 0
-        ? Number(advanceRaw)
-        : Number(service.price);
-
-      // Razorpay requires amount in smallest currency unit (paise)
+      const advanceRaw = (service as { advanceAmount?: string | null }).advanceAmount;
+      const advanceInr = advanceRaw && Number(advanceRaw) > 0 ? Number(advanceRaw) : Number(service.price);
       const amountPaise = Math.round(advanceInr * 100);
 
       if (amountPaise <= 0) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Advance amount must be greater than zero.",
-        });
+        throw new TRPCError({ code: "BAD_REQUEST", message: "Advance amount must be greater than zero." });
       }
 
-      // 4. Create Razorpay order
-      const rzp = getRazorpay();
+      const credentials = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
       const receipt = `adv-${input.slotId}-${Date.now()}`.slice(0, 40);
-      const order = await rzp.orders.create({
-        amount: amountPaise,
-        currency: "INR",
-        receipt,
-        notes: {
-          serviceId: String(input.serviceId),
-          slotId: String(input.slotId),
-          serviceName: service.name,
+
+      const response = await fetch("https://api.razorpay.com/v1/orders", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Basic ${credentials}`,
         },
+        body: JSON.stringify({
+          amount: amountPaise,
+          currency: "INR",
+          receipt,
+          notes: {
+            serviceId: String(input.serviceId ),
+            slotId: String(input.slotId),
+            serviceName: service.name,
+          },
+        }),
       });
 
-      return {
-        orderId: order.id,
-        amount: order.amount,       // paise
-        currency: order.currency,   // "INR"
-      };
+      if (!response.ok) {
+        const err = await response.text();
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: `Razorpay order creation failed: ${err}` });
+      }
+
+      const order = await response.json() as { id: string; amount: number; currency: string };
+      return { orderId: order.id, amount: order.amount, currency: order.currency };
     }),
 
-  /**
-   * Public: verify Razorpay payment signature and create + confirm booking.
-   *
-   * Flow:
-   * 1. Verify HMAC signature using RAZORPAY_KEY_SECRET
-   * 2. If valid: createBooking (marks slot booked atomically),
-   *    then confirmBooking immediately (payment already verified),
-   *    build coach WhatsApp deep-link, return referenceId
-   * 3. If invalid: throw UNAUTHORIZED — slot is never touched
-   */
   verifyAndConfirmBooking: publicProcedure
     .input(
       z.object({
@@ -760,24 +735,20 @@ const paymentsRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      // 1. Verify Razorpay HMAC signature
-      const keySecret = ENV.razorpayKeySecret;
+      const keySecret = env.razorpayKeySecret;
       if (!keySecret) {
         throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Razorpay not configured." });
       }
-      const isValid = validatePaymentVerification(
-        { order_id: input.razorpay_order_id, payment_id: input.razorpay_payment_id },
-        input.razorpay_signature,
-        keySecret
-      );
-      if (!isValid) {
-        throw new TRPCError({
-          code: "UNAUTHORIZED",
-          message: "Payment verification failed. Booking not created.",
-        });
+
+      // Verify HMAC signature using Node built-in crypto
+      const crypto = await import("crypto");
+      const body = `${input.razorpay_order_id}|${input.razorpay_payment_id}`;
+      const expectedSignature = crypto.createHmac("sha256", keySecret).update(body).digest("hex");
+      if (expectedSignature !== input.razorpay_signature) {
+        throw new TRPCError({ code: "UNAUTHORIZED", message: "Payment verification failed. Booking not created." });
       }
 
-      // 2. Create booking (slot atomically marked booked inside createBooking)
+      // Create booking
       let bookingResult: { id: number; referenceId: string };
       try {
         bookingResult = await createBooking({
@@ -795,11 +766,10 @@ const paymentsRouter = router({
         });
       }
 
-      // 3. Immediately confirm (payment already verified — no manual review needed)
-      // reviewedByUserId = 0 means system-confirmed
+      // Immediately confirm
       await confirmBookingPaid(bookingResult.id, `Razorpay ${input.razorpay_payment_id}`);
 
-      // 4. Build coach WhatsApp notification deep-link (wa.me, same as existing flow)
+      // Coach WhatsApp notification
       const facility = await getFacility();
       const service = await getServiceById(input.serviceId);
       const slot = await getSlotById(input.slotId);
@@ -828,7 +798,7 @@ const paymentsRouter = router({
         coachWhatsAppUrl = `https://wa.me/${facility.coachWhatsApp.replace(/\D/g, "" )}`;
       }
 
-      // 5. Notify platform owner (non-blocking)
+      // Notify platform owner (non-blocking)
       notifyOwner({
         title: "New Booking Confirmed via Razorpay",
         content: `${input.playerName} (${input.playerWhatsApp}) paid advance. Reference: ${bookingResult.referenceId}`,
@@ -841,6 +811,7 @@ const paymentsRouter = router({
       };
     }),
 });
+
 
 
 // ─── App router ───────────────────────────────────────────────────────────────
