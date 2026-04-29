@@ -662,7 +662,7 @@ function PaymentStep({
         </ul>
       </div>
           </div>
-    </div>
+        </div>
   );
 }
 
