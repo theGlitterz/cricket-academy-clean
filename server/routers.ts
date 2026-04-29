@@ -769,16 +769,14 @@ const paymentsRouter = router({
       // Immediately confirm
       await confirmBookingPaid(bookingResult.id, `Razorpay ${input.razorpay_payment_id}`);
 
-      // Coach WhatsApp notification
+      // Coach WhatsApp notification (Twilio — coach only, non-blocking)
       const facility = await getFacility();
       const service = await getServiceById(input.serviceId);
       const slot = await getSlotById(input.slotId);
-
       let coachWhatsAppUrl: string | null = null;
       if (facility?.coachWhatsApp) {
         const message = buildCoachNewBookingAlert({
           playerName: input.playerName,
-          playerWhatsApp: input.playerWhatsApp,
           serviceName: service?.name ?? "Unknown",
           bookingDate: slot?.date ?? "",
           startTime: slot?.startTime ?? "",
@@ -790,13 +788,11 @@ const paymentsRouter = router({
           facilityName: facility.facilityName ?? "BestCricketAcademy",
           coachWhatsApp: facility.coachWhatsApp,
         });
-        try {
-          await sendCoachWhatsApp(message);
-        } catch (err) {
-          console.error("Coach WhatsApp notification failed:", err);
-        }
+        // sendCoachWhatsApp handles all error logging internally and never throws
+        await sendCoachWhatsApp(message, facility.coachWhatsApp);
         coachWhatsAppUrl = `https://wa.me/${facility.coachWhatsApp.replace(/\D/g, "" )}`;
       }
+
 
       // Notify platform owner (non-blocking)
       notifyOwner({
