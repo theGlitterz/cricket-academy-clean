@@ -504,17 +504,26 @@ function DetailsStep({
 // ─── Step 4: Payment ──────────────────────────────────────────────────────────
 function PaymentStep({
   booking,
+  facility,
   onPaymentUploaded,
 }: {
   booking: BookingState;
-  onPaymentUploaded: () => void;
+  facility?: { coachWhatsApp?: string | null; facilityName?: string | null } | null;
+  onPaymentUploaded: (bookingId: number, referenceId: string) => void;
 }) {
+
   const { data: facility } = trpc.facility.get.useQuery();
   const [rzpLoading, setRzpLoading] = useState(false);
 
   const createOrderMutation = trpc.payments.createOrder.useMutation({
     onError: (err) => {
       toast.error(err.message ?? "Failed to create payment order. Please try again.");
+      setRzpLoading(false);
+    },
+  });
+  const verifyMutation = trpc.payments.verifyAndConfirmBooking.useMutation({
+    onError: (err) => {
+      toast.error(err.message ?? "Payment verification failed. Please contact support.");
       setRzpLoading(false);
     },
   });
@@ -554,20 +563,28 @@ function PaymentStep({
           contact: booking.playerWhatsApp ?? "",
         },
         theme: { color: "#1a4d2e" },
-        handler: (response: {
+              handler: async (response: {
           razorpay_payment_id: string;
           razorpay_order_id: string;
           razorpay_signature: string;
         }) => {
-          // TODO: send to backend for signature verification before confirming booking
-          console.log("Razorpay payment success:", {
-            razorpay_payment_id: response.razorpay_payment_id,
-            razorpay_order_id: response.razorpay_order_id,
-            razorpay_signature: response.razorpay_signature,
-          });
-          toast.success("Payment received! Your booking is under review.");
-          onPaymentUploaded();
+          try {
+            const result = await verifyMutation.mutateAsync({
+              slotId: booking.slotId!,
+              serviceId: booking.serviceId!,
+              playerName: booking.playerName ?? "",
+              playerWhatsApp: booking.playerWhatsApp ?? "",
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+            });
+            toast.success("Payment verified! Booking confirmed.");
+            onPaymentUploaded(result.bookingId, result.referenceId);
+          } catch {
+            // error already shown by verifyMutation.onError above
+          }
         },
+
         modal: {
           ondismiss: () => {
             setRzpLoading(false);
@@ -631,13 +648,16 @@ function PaymentStep({
       <Button
         size="lg"
         onClick={handlePayAdvance}
-        disabled={rzpLoading || createOrderMutation.isPending}
+        disabled={rzpLoading || createOrderMutation.isPending || verifyMutation.isPending}
         className="w-full h-12 rounded-xl text-base font-semibold mb-4"
         style={{ background: "oklch(0.38 0.13 145)", color: "white" }}
       >
-        {rzpLoading || createOrderMutation.isPending ? (
+                {verifyMutation.isPending ? (
+          <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Confirming Booking…</>
+        ) : rzpLoading || createOrderMutation.isPending ? (
           <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Opening Payment…</>
         ) : "Pay Advance"}
+
       </Button>
 
       {/* Instructions */}
