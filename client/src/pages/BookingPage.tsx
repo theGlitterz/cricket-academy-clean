@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Link, useLocation, useParams } from "wouter";
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect } from "react";
 import {
   ArrowLeft,
   Clock,
@@ -661,7 +661,224 @@ function PaymentStep({
           <li>• Pay the remaining ₹{remainingAmount.toLocaleString("en-IN")} at the ground</li>
         </ul>
       </div>
-     </div>
-);
+          </div>
+    </div>
+  );
 }
+
+// ─── Step 5: Done ─────────────────────────────────────────────────────────────
+function DoneStep({ booking, facility }: { booking: BookingState; facility?: { coachWhatsApp?: string | null; facilityName?: string | null } | null }) {
+  const shareText = `I've booked a ${booking.serviceName} session at BestCricketAcademy on ${booking.slotDate} at ${booking.slotStart}. Reference: ${booking.referenceId}`;
+  const priceNum = parseFloat(booking.servicePrice ?? "0");
+  const advanceNum = parseFloat(booking.serviceAdvance ?? "0");
+  const remainingNum = priceNum - advanceNum;
+  const coachWaLink = facility?.coachWhatsApp
+    ? buildWhatsAppLink(
+        facility.coachWhatsApp,
+        buildPlayerToCoachMessage({
+          playerName: booking.playerName ?? "",
+          serviceName: booking.serviceName ?? "",
+          bookingDate: booking.slotDate ?? "",
+          startTime: booking.slotStart ?? "",
+          endTime: booking.slotEnd ?? "",
+          referenceId: booking.referenceId ?? "",
+          totalPrice: priceNum,
+          advancePaid: advanceNum,
+          remainingAtGround: remainingNum,
+          facilityName: facility?.facilityName ?? undefined,
+        })
+      )
+    : null;
+
+  return (
+    <div className="text-center py-4">
+      <div className="flex justify-center mb-6">
+        <div className="w-20 h-20 rounded-full flex items-center justify-center" style={{ background: "oklch(0.38 0.13 145 / 0.12)" }}>
+          <CheckCircle2 className="w-10 h-10" style={{ color: "oklch(0.38 0.13 145)" }} />
+        </div>
+      </div>
+      <h1 className="text-2xl font-extrabold text-foreground mb-2" style={{ fontFamily: "Syne, sans-serif" }}>
+        Booking Confirmed!
+      </h1>
+      <p className="text-sm text-muted-foreground mb-6 max-w-xs mx-auto">
+        Your payment has been received and your slot is confirmed.
+      </p>
+      <div className="bg-white border border-border rounded-2xl p-5 text-left mb-5">
+        <div className="flex items-center justify-between mb-3">
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Booking Reference</p>
+          <Badge className="text-xs font-semibold px-2.5 py-1 rounded-full border-0" style={{ background: "oklch(0.38 0.13 145 / 0.15)", color: "oklch(0.38 0.13 145)" }}>
+            Confirmed
+          </Badge>
+        </div>
+        <p className="text-2xl font-extrabold mb-4 tracking-wider" style={{ fontFamily: "Syne, sans-serif", color: "oklch(0.38 0.13 145)" }}>
+          {booking.referenceId}
+        </p>
+        <div className="space-y-2 border-t border-border pt-4">
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Service</span>
+            <span className="font-medium text-foreground">{booking.serviceName}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Date</span>
+            <span className="font-medium text-foreground">
+              {booking.slotDate ? new Date(booking.slotDate + "T00:00:00").toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "long" }) : "—"}
+            </span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Time</span>
+            <span className="font-medium text-foreground">{booking.slotStart} – {booking.slotEnd}</span>
+          </div>
+          <div className="flex justify-between text-sm">
+            <span className="text-muted-foreground">Name</span>
+            <span className="font-medium text-foreground">{booking.playerName}</span>
+          </div>
+        </div>
+      </div>
+      <div className="rounded-2xl p-4 text-left mb-6 border" style={{ background: "oklch(0.95 0.03 145)", borderColor: "oklch(0.85 0.06 145)" }}>
+        <p className="text-xs font-semibold mb-2" style={{ color: "oklch(0.38 0.13 145)" }}>What happens next?</p>
+        <ul className="text-xs text-muted-foreground space-y-1.5">
+          {["Your slot is locked — no one else can book it", "Show your booking reference & make remaining payment at the ground", "Arrive 10 minutes before your session"].map((text, i) => (
+            <li key={i} className="flex items-start gap-1.5">
+              <span className="mt-0.5 w-4 h-4 rounded-full bg-primary/20 flex items-center justify-center shrink-0 text-[9px] font-bold text-primary">{i + 1}</span>
+              {text}
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="flex flex-col gap-3">
+        <Link href={`/booking/${booking.referenceId}`}>
+          <Button size="lg" className="w-full h-12 rounded-xl font-semibold" style={{ background: "oklch(0.38 0.13 145)", color: "white" }}>
+            Track Booking Status
+          </Button>
+        </Link>
+        {coachWaLink && (
+          <a href={coachWaLink} target="_blank" rel="noopener noreferrer">
+            <Button size="lg" className="w-full h-12 rounded-xl font-semibold" style={{ background: "oklch(0.25 0.12 145)", color: "white" }}>
+              Send details to coach on WhatsApp
+            </Button>
+          </a>
+        )}
+        <a href={`https://wa.me/?text=${encodeURIComponent(shareText )}`} target="_blank" rel="noopener noreferrer">
+          <Button size="lg" variant="outline" className="w-full h-12 rounded-xl font-semibold border-2">
+            Share on WhatsApp
+          </Button>
+        </a>
+        <Link href="/">
+          <Button variant="ghost" size="lg" className="w-full h-12 rounded-xl text-muted-foreground">
+            Back to Home
+          </Button>
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main BookingPage ─────────────────────────────────────────────────────────
+export default function BookingPage() {
+  const params = useParams<{ serviceSlug?: string }>();
+  const [, navigate] = useLocation();
+  const [step, setStep] = useState<Step>(params.serviceSlug ? "slot" : "service");
+  const [booking, setBooking] = useState<BookingState>({ serviceSlug: params.serviceSlug });
+
+  const { data: services } = trpc.services.list.useQuery();
+  const { data: facility } = trpc.facility.get.useQuery();
+
+  useEffect(() => {
+    if (params.serviceSlug && services && !booking.serviceId) {
+      const svc = services.find((s) => s.slug === params.serviceSlug);
+      if (svc) {
+        setBooking({
+          serviceId: svc.id,
+          serviceSlug: svc.slug,
+          serviceName: svc.name,
+          servicePrice: String(svc.price),
+          serviceAdvance: String(svc.advanceAmount ?? "0"),
+          serviceDuration: svc.durationMinutes,
+        });
+      }
+    }
+  }, [params.serviceSlug, services, booking.serviceId]);
+
+  const goBack = useCallback(() => {
+    if (step === "done") return;
+    const idx = STEP_ORDER.indexOf(step);
+    if (idx > 0) setStep(STEP_ORDER[idx - 1]);
+    else navigate("/");
+  }, [step, navigate]);
+
+  const headerTitle: Record<Step, string> = {
+    service: "Book a Session",
+    slot: "Pick a Slot",
+    details: "Your Details",
+    payment: "Payment",
+    done: "Booking Confirmed",
+  };
+
+  return (
+    <div className="min-h-screen bg-background flex flex-col">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-border">
+        <div className="max-w-lg mx-auto px-4 h-14 flex items-center gap-3">
+          {step !== "done" ? (
+            <button
+              onClick={goBack}
+              className="w-9 h-9 flex items-center justify-center rounded-xl hover:bg-muted transition-colors shrink-0"
+              aria-label="Go back"
+            >
+              <ArrowLeft className="w-4 h-4" />
+            </button>
+          ) : <div className="w-9" />}
+          <p className="flex-1 text-sm font-bold text-foreground" style={{ fontFamily: "Syne, sans-serif" }}>
+            {headerTitle[step]}
+          </p>
+          <Link href="/">
+            <span className="text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer">BCA</span>
+          </Link>
+        </div>
+        <StepBar current={step} />
+      </header>
+      <main className="flex-1 max-w-lg mx-auto w-full px-4 py-6 pb-10">
+        {step === "service" && (
+          <ServiceStep
+            initialSlug={booking.serviceSlug}
+            onSelect={(service) => {
+              setBooking({ serviceId: service.id, serviceSlug: service.slug, serviceName: service.name, servicePrice: service.price, serviceAdvance: service.advance, serviceDuration: service.duration });
+              setStep("slot");
+            }}
+          />
+        )}
+        {step === "slot" && booking.serviceId && (
+          <SlotStep
+            serviceId={booking.serviceId}
+            serviceName={booking.serviceName ?? ""}
+            onSelect={(slot) => {
+              setBooking((prev) => ({ ...prev, slotId: slot.id, slotDate: slot.date, slotStart: slot.start, slotEnd: slot.end }));
+              setStep("details");
+            }}
+          />
+        )}
+        {step === "details" && (
+          <DetailsStep
+            booking={booking}
+            onSubmit={(name, whatsApp) => {
+              setBooking((prev) => ({ ...prev, playerName: name, playerWhatsApp: whatsApp }));
+              setStep("payment");
+            }}
+          />
+        )}
+        {step === "payment" && (
+          <PaymentStep
+            booking={booking}
+            facility={facility}
+            onPaymentUploaded={(bookingId, referenceId) => {
+              setBooking((prev) => ({ ...prev, bookingId, referenceId }));
+              setStep("done");
+            }}
+          />
+        )}
+        {step === "done" && <DoneStep booking={booking} facility={facility} />}
+      </main>
+    </div>
+  );
+}
+
 
