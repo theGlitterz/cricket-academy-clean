@@ -646,6 +646,7 @@ const bookingsRouter = router({
 // ─── Payments router ─────────────────────────────────────────────────────────
 
 import Razorpay from "razorpay";
+import { validatePaymentVerification } from "razorpay/dist/utils/razorpay-utils";
 
 function getRazorpay() {
   const keyId = ENV.razorpayKeyId;
@@ -734,7 +735,113 @@ const paymentsRouter = router({
         currency: order.currency,   // "INR"
       };
     }),
+
+  /**
+   * Public: verify Razorpay payment signature and create + confirm booking.
+   *
+   * Flow:
+   * 1. Verify HMAC signature using RAZORPAY_KEY_SECRET
+   * 2. If valid: createBooking (marks slot booked atomically),
+   *    then confirmBooking immediately (payment already verified),
+   *    build coach WhatsApp deep-link, return referenceId
+   * 3. If invalid: throw UNAUTHORIZED — slot is never touched
+   */
+  verifyAndConfirmBooking: publicProcedure
+    .input(
+      z.object({
+        slotId: z.number().int(),
+        serviceId: z.number().int(),
+        playerName: z.string().min(1),
+        playerWhatsApp: z.string().min(10),
+        playerEmail: z.string().email().optional(),
+        razorpay_order_id: z.string(),
+        razorpay_payment_id: z.string(),
+        razorpay_signature: z.string(),
+      })
+    )
+    .mutation(async ({ input }) => {
+      // 1. Verify Razorpay HMAC signature
+      const keySecret = ENV.razorpayKeySecret;
+      if (!keySecret) {
+        throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Razorpay not configured." });
+      }
+      const isValid = validatePaymentVerification(
+        { order_id: input.razorpay_order_id, payment_id: input.razorpay_payment_id },
+        input.razorpay_signature,
+        keySecret
+      );
+      if (!isValid) {
+        throw new TRPCError({
+          code: "UNAUTHORIZED",
+          message: "Payment verification failed. Booking not created.",
+        });
+      }
+
+      // 2. Create booking (slot atomically marked booked inside createBooking)
+      let bookingResult: { id: number; referenceId: string };
+      try {
+        bookingResult = await createBooking({
+          slotId: input.slotId,
+          serviceId: input.serviceId,
+          playerName: input.playerName,
+          playerWhatsApp: input.playerWhatsApp,
+          playerEmail: input.playerEmail,
+          facilityId: FACILITY_ID,
+        });
+      } catch (err) {
+        throw new TRPCError({
+          code: "CONFLICT",
+          message: err instanceof Error ? err.message : "Booking failed after payment.",
+        });
+      }
+
+      // 3. Immediately confirm (payment already verified — no manual review needed)
+      // reviewedByUserId = 0 means system-confirmed
+      await confirmBookingPaid(bookingResult.id, `Razorpay ${input.razorpay_payment_id}`);
+
+      // 4. Build coach WhatsApp notification deep-link (wa.me, same as existing flow)
+      const facility = await getFacility();
+      const service = await getServiceById(input.serviceId);
+      const slot = await getSlotById(input.slotId);
+
+      let coachWhatsAppUrl: string | null = null;
+      if (facility?.coachWhatsApp) {
+        const message = buildCoachNewBookingAlert({
+          playerName: input.playerName,
+          playerWhatsApp: input.playerWhatsApp,
+          serviceName: service?.name ?? "Unknown",
+          bookingDate: slot?.date ?? "",
+          startTime: slot?.startTime ?? "",
+          endTime: slot?.endTime ?? "",
+          amount: Number(service?.price ?? 0),
+          advance: Number((service as { advanceAmount?: string | null }).advanceAmount ?? 0),
+          remaining: Number(service?.price ?? 0) - Number((service as { advanceAmount?: string | null }).advanceAmount ?? 0),
+          referenceId: bookingResult.referenceId,
+          facilityName: facility.facilityName ?? "BestCricketAcademy",
+          coachWhatsApp: facility.coachWhatsApp,
+        });
+        try {
+          await sendCoachWhatsApp(message);
+        } catch (err) {
+          console.error("Coach WhatsApp notification failed:", err);
+        }
+        coachWhatsAppUrl = `https://wa.me/${facility.coachWhatsApp.replace(/\D/g, "" )}`;
+      }
+
+      // 5. Notify platform owner (non-blocking)
+      notifyOwner({
+        title: "New Booking Confirmed via Razorpay",
+        content: `${input.playerName} (${input.playerWhatsApp}) paid advance. Reference: ${bookingResult.referenceId}`,
+      }).catch(() => {});
+
+      return {
+        referenceId: bookingResult.referenceId,
+        bookingId: bookingResult.id,
+        coachWhatsAppUrl,
+      };
+    }),
 });
+
 
 // ─── App router ───────────────────────────────────────────────────────────────
 const superAdminRouter = router({
