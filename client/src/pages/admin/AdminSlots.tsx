@@ -44,15 +44,30 @@ function formatTime(t: string) {
   return `${hour}:${String(m).padStart(2, "0")} ${ampm}`;
 }
 
-function addDays(date: Date, days: number) {
-  const d = new Date(date);
-  d.setDate(d.getDate() + days);
-  return d;
+/** Get current date string in IST (YYYY-MM-DD) */
+function todayIST(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
-function toDateStr(d: Date) {
-  return d.toISOString().split("T")[0]!;
+/** Add days to a YYYY-MM-DD string, returns YYYY-MM-DD in IST */
+function addDaysToDateStr(dateStr: string, days: number): string {
+  // Parse as noon IST to avoid any DST/midnight edge cases
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const base = new Date(Date.UTC((y ?? 0), (m ?? 1) - 1, (d ?? 1), 6, 30, 0)); // 06:30 UTC = 12:00 IST
+  base.setUTCDate(base.getUTCDate() + days);
+  return base.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
+
+/** Legacy helper kept for bulk date range calc */
+function addDays(date: Date, days: number) {
+  const d = new Date(date);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
+}
+function toDateStr(d: Date) {
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
 
 function formatDisplayDate(dateStr: string) {
   const d = new Date(dateStr + "T00:00:00");
@@ -116,7 +131,7 @@ const AVAIL_LABEL: Record<string, string> = {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function AdminSlots() {
-  const today = useMemo(() => toDateStr(new Date()), []);
+  const today = useMemo(() => todayIST(), []);
   const [selectedDate, setSelectedDate] = useState(today);
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
@@ -131,7 +146,8 @@ export default function AdminSlots() {
   // Bulk form
   const [bulkServiceId, setBulkServiceId] = useState("");
   const [bulkFromDate, setBulkFromDate] = useState(today);
-  const [bulkToDate, setBulkToDate] = useState(toDateStr(addDays(new Date(), 6)));
+  const [bulkToDate, setBulkToDate] = useState(addDaysToDateStr(today, 6));
+
 
   const utils = trpc.useUtils();
 
