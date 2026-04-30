@@ -242,6 +242,14 @@ export default function AdminSlots() {
 
       {/* ── Date Navigator ── */}
       <div className="flex items-center gap-2 mb-3">
+        {selectedDate !== today && (
+          <button
+            onClick={() => setSelectedDate(today)}
+            className="shrink-0 px-2.5 py-1 rounded-lg text-xs font-medium bg-primary/10 text-primary hover:bg-primary/20 transition-colors"
+          >
+            Today
+          </button>
+        )}
         <button
           onClick={() =>
             setSelectedDate(toDateStr(addDays(new Date(selectedDate + "T00:00:00"), -1)))
@@ -250,18 +258,20 @@ export default function AdminSlots() {
         >
           <ChevronLeft className="w-4 h-4" />
         </button>
-        <button
-          className="flex-1 text-center py-1 rounded-xl hover:bg-muted transition-colors"
-          onClick={() => {
-            const val = prompt("Enter date (YYYY-MM-DD):", selectedDate);
-            if (val && /^\d{4}-\d{2}-\d{2}$/.test(val)) setSelectedDate(val);
-          }}
-        >
+               <label className="flex-1 text-center py-1 rounded-xl hover:bg-muted transition-colors cursor-pointer relative">
           <p className="text-sm font-semibold text-foreground">{formatDisplayDate(selectedDate)}</p>
           {selectedDate === today && (
             <span className="text-[10px] text-primary font-medium">Today</span>
           )}
-        </button>
+          <input
+            type="date"
+            value={selectedDate}
+            onChange={(e) => { if (e.target.value) setSelectedDate(e.target.value); }}
+            className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+            aria-label="Select date"
+          />
+        </label>
+
         <button
           onClick={() =>
             setSelectedDate(toDateStr(addDays(new Date(selectedDate + "T00:00:00"), 1)))
