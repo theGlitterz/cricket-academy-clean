@@ -39,6 +39,7 @@ import {
   createBooking,
   createSlot,
   getAllBookings,
+  getAllSlotsForDate,
   getAllServices,
   getActiveServices,
   getAvailableSlots,
@@ -560,6 +561,18 @@ const bookingsRouter = router({
   /** Admin: get booking stats */
   stats: adminProcedure.query(async () => {
     return getBookingStats(FACILITY_ID);
+  }),
+  /** Admin: today-specific stats for dashboard */
+  todayStats: adminProcedure.query(async () => {
+    const today = new Date().toISOString().split("T")[0]!;
+    const todayBs = await getAllBookings(FACILITY_ID, undefined, today);
+    const confirmedToday = todayBs.filter((b) => b.bookingStatus === "confirmed");
+    const advanceCollected = confirmedToday.reduce((sum, b) => sum + Number(b.advance ?? 0), 0);
+    // Count available slots for today
+    const todaySlots = await getAllSlotsForDate(today, FACILITY_ID);
+    const openSlots = todaySlots.filter((s) => s.availabilityStatus === "available").length;
+    const bookedSlots = todaySlots.filter((s) => s.availabilityStatus === "booked").length;
+    return { advanceCollected, openSlots, bookedSlots, totalToday: todayBs.length };
   }),
 
   /**
