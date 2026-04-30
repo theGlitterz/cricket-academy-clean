@@ -403,8 +403,10 @@ export default function AdminSlots() {
             <div key={i} className="h-14 rounded-xl bg-muted animate-pulse" />
           ))}
         </div>
-      ) : filteredSlots && filteredSlots.length > 0 ? (
-        <div className="space-y-2">
+           ) : filteredSlots && filteredSlots.length > 0 ? (
+        <>
+          <div className="space-y-2">
+
                   {/* ── Select All bar ── */}
           {filteredSlots.filter((s) => s.availabilityStatus !== "booked").length > 1 && (
             <div className="flex items-center gap-2 mb-1 px-1">
@@ -515,8 +517,9 @@ export default function AdminSlots() {
             );
           })}
         </div>
+          
         {/* ── Bulk action bar ── */}
-          {selectedIds.size > 0 && (
+        {selectedIds.size > 0 && (
             <div className="fixed bottom-20 left-0 right-0 mx-4 z-50">
               <div className="bg-foreground text-background rounded-2xl p-3 flex items-center justify-between shadow-xl">
                 <span className="text-sm font-medium">
@@ -553,7 +556,7 @@ export default function AdminSlots() {
               </div>
             </div>
           )}
-        </div>
+        </>
       ) : (
 
         <div className="rounded-2xl border border-dashed border-border p-10 text-center">
