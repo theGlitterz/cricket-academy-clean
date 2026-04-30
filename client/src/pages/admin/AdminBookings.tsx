@@ -22,14 +22,19 @@ const STATUS_TABS: { value: StatusFilter; label: string }[] = [
 ];
 
 function toDateStr(d: Date) {
-  return d.toISOString().split("T")[0]!;
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
 }
 
 function addDays(d: Date, n: number) {
   const r = new Date(d);
-  r.setDate(r.getDate() + n);
+  r.setUTCDate(r.getUTCDate() + n);
   return r;
 }
+
+function todayIST(): string {
+  return new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+}
+
 
 function formatTime(t: string | null | undefined) {
   if (!t) return "";
@@ -76,7 +81,7 @@ function chipToDateFilter(chip: DateChip): string | undefined {
 
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function AdminBookings() {
-  const todayStr = useMemo(() => toDateStr(new Date()), []);
+  const todayStr = useMemo(() => todayIST(), []);
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [dateChip, setDateChip] = useState<DateChip>("today");
