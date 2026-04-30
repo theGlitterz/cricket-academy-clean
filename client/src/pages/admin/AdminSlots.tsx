@@ -136,6 +136,15 @@ export default function AdminSlots() {
   const [serviceFilter, setServiceFilter] = useState<string>("all");
   const [createOpen, setCreateOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  // ── Bulk selection state ──────────────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
+  const [confirmModal, setConfirmModal] = useState<{
+    open: boolean;
+    title: string;
+    description: string;
+    onConfirm: () => void;
+  }>({ open: false, title: "", description: "", onConfirm: () => {} });
+
 
   // Single slot form
   const [newServiceId, setNewServiceId] = useState("");
@@ -199,6 +208,32 @@ export default function AdminSlots() {
     },
     onError: (e) => toast.error(e.message),
   });
+  const bulkDeleteMutation = trpc.slots.bulkDelete.useMutation({
+    onSuccess: (result) => {
+      const msg =
+        result.skipped > 0
+          ? `${result.deleted} slot${result.deleted !== 1 ? "s" : ""} deleted, ${result.skipped} booked slot${result.skipped !== 1 ? "s" : ""} skipped`
+          : `${result.deleted} slot${result.deleted !== 1 ? "s" : ""} deleted`;
+      toast.success(msg);
+      setSelectedIds(new Set());
+      utils.slots.getByDate.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const deleteAllOpenMutation = trpc.slots.deleteAllOpenForDate.useMutation({
+    onSuccess: (result) => {
+      const msg =
+        result.skipped > 0
+          ? `${result.deleted} slot${result.deleted !== 1 ? "s" : ""} deleted, ${result.skipped} booked slot${result.skipped !== 1 ? "s" : ""} skipped`
+          : `${result.deleted} slot${result.deleted !== 1 ? "s" : ""} deleted`;
+      toast.success(msg);
+      setSelectedIds(new Set());
+      utils.slots.getByDate.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
 
   const createBulkMutation = trpc.slots.createBulk.useMutation({
     onSuccess: (result) => {
@@ -244,7 +279,28 @@ export default function AdminSlots() {
             Create, block, and manage time slots
           </p>
         </div>
-        <div className="flex gap-2">
+           <div className="flex gap-2">
+          {filteredSlots && filteredSlots.filter((s) => s.availabilityStatus !== "booked").length > 0 && (
+            <Button
+              size="sm"
+              variant="outline"
+              className="rounded-xl border-red-200 text-red-600 hover:bg-red-50"
+              onClick={() => {
+                const openCount = filteredSlots.filter((s) => s.availabilityStatus !== "booked").length;
+                const bookedCount = filteredSlots.filter((s) => s.availabilityStatus === "booked").length;
+                setConfirmModal({
+                  open: true,
+                  title: "Delete all open slots?",
+                  description: `This will delete ${openCount} open slot${openCount !== 1 ? "s" : ""} for ${formatDisplayDate(selectedDate)}.${bookedCount > 0 ? ` ${bookedCount} booked slot${bookedCount !== 1 ? "s" : ""} will be skipped.` : ""} This cannot be undone.`,
+                  onConfirm: () => deleteAllOpenMutation.mutate({ date: selectedDate }),
+                });
+              }}
+              disabled={deleteAllOpenMutation.isPending}
+            >
+              <Trash2 className="w-4 h-4 mr-1.5" />
+              Clear Date
+            </Button>
+          )}
           <Button size="sm" variant="outline" className="rounded-xl" onClick={() => setBulkOpen(true)}>
             <Layers className="w-4 h-4 mr-1.5" />
             Bulk
@@ -254,6 +310,7 @@ export default function AdminSlots() {
             Add
           </Button>
         </div>
+
       </div>
 
       {/* ── Date Navigator ── */}
@@ -349,17 +406,60 @@ export default function AdminSlots() {
         </div>
       ) : filteredSlots && filteredSlots.length > 0 ? (
         <div className="space-y-2">
+                  {/* ── Select All bar ── */}
+          {filteredSlots.filter((s) => s.availabilityStatus !== "booked").length > 1 && (
+            <div className="flex items-center gap-2 mb-1 px-1">
+              <input
+                type="checkbox"
+                id="select-all-slots"
+                className="w-4 h-4 rounded accent-primary cursor-pointer"
+                checked={
+                  filteredSlots
+                    .filter((s) => s.availabilityStatus !== "booked")
+                    .every((s) => selectedIds.has(s.id))
+                }
+                onChange={(e) => {
+                  const openIds = filteredSlots
+                    .filter((s) => s.availabilityStatus !== "booked")
+                    .map((s) => s.id);
+                  setSelectedIds(e.target.checked ? new Set(openIds) : new Set());
+                }}
+              />
+              <label htmlFor="select-all-slots" className="text-xs text-muted-foreground cursor-pointer select-none">
+                Select all open slots
+              </label>
+            </div>
+          )}
+
           {filteredSlots.map((slot) => {
             const svc = services?.find((s) => s.id === slot.serviceId);
             const isBooked = slot.availabilityStatus === "booked";
             const isBlocked = slot.availabilityStatus === "blocked";
+            const isSelected = selectedIds.has(slot.id);
             return (
               <Card
                 key={slot.id}
-                className={`border ${AVAIL_CARD_CSS[slot.availabilityStatus] ?? "border-border"}`}
+                className={`border ${AVAIL_CARD_CSS[slot.availabilityStatus] ?? "border-border"} ${isSelected ? "ring-2 ring-primary/40" : ""}`}
               >
                 <CardContent className="p-3 flex items-center justify-between gap-2">
+                  {/* Checkbox for selectable (non-booked) slots */}
+                  {!isBooked && (
+                    <input
+                      type="checkbox"
+                      className="w-4 h-4 rounded accent-primary cursor-pointer shrink-0"
+                      checked={isSelected}
+                      onChange={(e) => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev);
+                          if (e.target.checked) next.add(slot.id);
+                          else next.delete(slot.id);
+                          return next;
+                        });
+                      }}
+                    />
+                  )}
                   <div className="flex-1 min-w-0">
+
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-foreground">
                         {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
@@ -415,9 +515,49 @@ export default function AdminSlots() {
               </Card>
             );
           })}
-        </div>
+               </div>
+              {/* ── Bulk action bar ── */}
+        {selectedIds.size > 0 && (
+          <div className="fixed bottom-20 left-0 right-0 mx-4 z-50">
+            <div className="bg-foreground text-background rounded-2xl p-3 flex items-center justify-between shadow-xl">
+              <span className="text-sm font-medium">
+                {selectedIds.size} slot{selectedIds.size !== 1 ? "s" : ""} selected
+              </span>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setSelectedIds(new Set())}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-background/20 hover:bg-background/30 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    const ids = Array.from(selectedIds);
+                    setConfirmModal({
+                      open: true,
+                      title: `Delete ${ids.length} slot${ids.length !== 1 ? "s" : ""}?`,
+                      description: `This will permanently delete ${ids.length} selected slot${ids.length !== 1 ? "s" : ""}. Booked slots will be skipped automatically. This cannot be undone.`,
+                      onConfirm: () => bulkDeleteMutation.mutate({ ids }),
+                    });
+                  }}
+                  disabled={bulkDeleteMutation.isPending}
+                  className="text-xs px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors flex items-center gap-1.5"
+                >
+                  {bulkDeleteMutation.isPending ? (
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                  ) : (
+                    <Trash2 className="w-3 h-3" />
+                  )}
+                  Delete Selected
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       ) : (
         <div className="rounded-2xl border border-dashed border-border p-10 text-center">
+
           <CalendarDays className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
           <p className="text-sm font-medium text-foreground">No slots for this date</p>
           <p className="text-xs text-muted-foreground mt-0.5">
@@ -587,6 +727,37 @@ export default function AdminSlots() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+            {/* ── Confirmation Modal ── */}
+      <Dialog open={confirmModal.open} onOpenChange={(open) => !open && setConfirmModal((p) => ({ ...p, open: false }))}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>{confirmModal.title}</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground px-1">{confirmModal.description}</p>
+          <DialogFooter className="flex gap-2 pt-2">
+            <Button
+              variant="outline"
+              className="flex-1 rounded-xl"
+              onClick={() => setConfirmModal((p) => ({ ...p, open: false }))}
+            >
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 rounded-xl bg-red-500 hover:bg-red-600 text-white"
+              onClick={() => {
+                confirmModal.onConfirm();
+                setConfirmModal((p) => ({ ...p, open: false }));
+              }}
+              disabled={bulkDeleteMutation.isPending || deleteAllOpenMutation.isPending}
+            >
+              {bulkDeleteMutation.isPending || deleteAllOpenMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : "Delete"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     </AdminLayout>
   );
 }
