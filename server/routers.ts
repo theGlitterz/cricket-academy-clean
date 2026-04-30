@@ -552,11 +552,13 @@ const bookingsRouter = router({
         status: z
           .enum(["pending", "confirmed", "rejected", "cancelled"])
           .optional(),
+        date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(), // YYYY-MM-DD
       })
     )
     .query(async ({ input }) => {
-      return getAllBookings(FACILITY_ID, input.status);
+      return getAllBookings(FACILITY_ID, input.status, input.date);
     }),
+
 
   /** Admin: get booking stats */
   stats: adminProcedure.query(async () => {
