@@ -310,7 +310,6 @@ export default function AdminSlots() {
             Add
           </Button>
         </div>
-
       </div>
 
       {/* ── Date Navigator ── */}
@@ -516,46 +515,47 @@ export default function AdminSlots() {
             );
           })}
                </div>
-              {/* ── Bulk action bar ── */}
-        {selectedIds.size > 0 && (
-          <div className="fixed bottom-20 left-0 right-0 mx-4 z-50">
-            <div className="bg-foreground text-background rounded-2xl p-3 flex items-center justify-between shadow-xl">
-              <span className="text-sm font-medium">
-                {selectedIds.size} slot{selectedIds.size !== 1 ? "s" : ""} selected
-              </span>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setSelectedIds(new Set())}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-background/20 hover:bg-background/30 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={() => {
-                    const ids = Array.from(selectedIds);
-                    setConfirmModal({
-                      open: true,
-                      title: `Delete ${ids.length} slot${ids.length !== 1 ? "s" : ""}?`,
-                      description: `This will permanently delete ${ids.length} selected slot${ids.length !== 1 ? "s" : ""}. Booked slots will be skipped automatically. This cannot be undone.`,
-                      onConfirm: () => bulkDeleteMutation.mutate({ ids }),
-                    });
-                  }}
-                  disabled={bulkDeleteMutation.isPending}
-                  className="text-xs px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors flex items-center gap-1.5"
-                >
-                  {bulkDeleteMutation.isPending ? (
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                  ) : (
-                    <Trash2 className="w-3 h-3" />
-                  )}
-                  Delete Selected
-                </button>
+                {/* ── Bulk action bar ── */}
+          {selectedIds.size > 0 && (
+            <div className="fixed bottom-20 left-0 right-0 mx-4 z-50">
+              <div className="bg-foreground text-background rounded-2xl p-3 flex items-center justify-between shadow-xl">
+                <span className="text-sm font-medium">
+                  {selectedIds.size} slot{selectedIds.size !== 1 ? "s" : ""} selected
+                </span>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSelectedIds(new Set())}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-background/20 hover:bg-background/30 transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => {
+                      const ids = Array.from(selectedIds);
+                      setConfirmModal({
+                        open: true,
+                        title: `Delete ${ids.length} slot${ids.length !== 1 ? "s" : ""}?`,
+                        description: `This will permanently delete ${ids.length} selected slot${ids.length !== 1 ? "s" : ""}. Booked slots will be skipped automatically. This cannot be undone.`,
+                        onConfirm: () => bulkDeleteMutation.mutate({ ids }),
+                      });
+                    }}
+                    disabled={bulkDeleteMutation.isPending}
+                    className="text-xs px-3 py-1.5 rounded-lg bg-red-500 hover:bg-red-600 text-white font-medium transition-colors flex items-center gap-1.5"
+                  >
+                    {bulkDeleteMutation.isPending ? (
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-3 h-3" />
+                    )}
+                    Delete Selected
+                  </button>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-
+          )}
+        </div>
       ) : (
+
         <div className="rounded-2xl border border-dashed border-border p-10 text-center">
 
           <CalendarDays className="w-8 h-8 text-muted-foreground/30 mx-auto mb-2" />
