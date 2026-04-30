@@ -514,8 +514,8 @@ export default function AdminSlots() {
               </Card>
             );
           })}
-               </div>
-                {/* ── Bulk action bar ── */}
+        </div>
+        {/* ── Bulk action bar ── */}
           {selectedIds.size > 0 && (
             <div className="fixed bottom-20 left-0 right-0 mx-4 z-50">
               <div className="bg-foreground text-background rounded-2xl p-3 flex items-center justify-between shadow-xl">
