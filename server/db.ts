@@ -9,7 +9,7 @@
  *   transitions) so they cannot be bypassed by any caller.
  */
 
-import { and, desc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { nanoid } from "nanoid";
@@ -260,6 +260,58 @@ export async function deleteSlot(id: number): Promise<void> {
   if (!slot) throw new Error("Slot not found");
   if (slot.availabilityStatus === "booked") throw new Error("Cannot delete a booked slot");
   await db.delete(slots).where(eq(slots.id, id));
+}
+/**
+ * Bulk delete slots by IDs.
+ * Skips any slot whose availabilityStatus is "booked".
+ * Returns { deleted, skipped } counts.
+ */
+export async function bulkDeleteSlots(
+  ids: number[]
+): Promise<{ deleted: number; skipped: number }> {
+  const db = await getDb();
+  if (!db || ids.length === 0) return { deleted: 0, skipped: 0 };
+
+  const rows = await db
+    .select({ id: slots.id, availabilityStatus: slots.availabilityStatus })
+    .from(slots)
+    .where(inArray(slots.id, ids));
+
+  const deletable = rows.filter((r) => r.availabilityStatus !== "booked").map((r) => r.id);
+  const skipped = rows.length - deletable.length;
+
+  if (deletable.length > 0) {
+    await db.delete(slots).where(inArray(slots.id, deletable));
+  }
+
+  return { deleted: deletable.length, skipped };
+}
+
+/**
+ * Delete all open (available/blocked) slots for a given date and facility.
+ * Never deletes booked slots.
+ * Returns { deleted, skipped } counts.
+ */
+export async function deleteOpenSlotsForDate(
+  facilityId: number,
+  date: string
+): Promise<{ deleted: number; skipped: number }> {
+  const db = await getDb();
+  if (!db) return { deleted: 0, skipped: 0 };
+
+  const rows = await db
+    .select({ id: slots.id, availabilityStatus: slots.availabilityStatus })
+    .from(slots)
+    .where(and(eq(slots.facilityId, facilityId), eq(slots.date, date)));
+
+  const deletable = rows.filter((r) => r.availabilityStatus !== "booked").map((r) => r.id);
+  const skipped = rows.length - deletable.length;
+
+  if (deletable.length > 0) {
+    await db.delete(slots).where(inArray(slots.id, deletable));
+  }
+
+  return { deleted: deletable.length, skipped };
 }
 
 /** Get a slot by id. */
