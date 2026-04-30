@@ -60,7 +60,10 @@ import {
   getAllSlotsForDate,
   deleteSlot,
   deleteFacility,
+  bulkDeleteSlots,
+  deleteOpenSlotsForDate,
 } from "./db";
+
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 
@@ -407,7 +410,28 @@ const slotsRouter = router({
       await deleteSlot(input.id);
       return { success: true };
     }),
+
+  /**
+   * Admin: bulk delete selected slots by IDs.
+   * Booked slots are skipped automatically.
+   */
+  bulkDelete: adminProcedure
+    .input(z.object({ ids: z.array(z.number().int()).min(1) }))
+    .mutation(async ({ input }) => {
+      return bulkDeleteSlots(input.ids);
+    }),
+
+  /**
+   * Admin: delete all open (available/blocked) slots for a given date.
+   * Booked slots are never deleted.
+   */
+  deleteAllOpenForDate: adminProcedure
+    .input(z.object({ date: z.string() }))
+    .mutation(async ({ input }) => {
+      return deleteOpenSlotsForDate(FACILITY_ID, input.date);
+    }),
 });
+
 
 // ─── Bookings router ──────────────────────────────────────────────────────────
 
