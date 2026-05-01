@@ -809,15 +809,14 @@ export async function deleteFacility(id: number): Promise<void> {
     throw new Error("Cannot delete: this facility has bookings.");
   }
 
-  // Check for linked facility_admin users
-  const linkedUsers = await db
-    .select({ id: users.id })
-    .from(users)
-    .where(eq(users.facilityId, id))
-    .limit(1);
-  if (linkedUsers.length > 0) {
+    // Check for linked facility_admin users (raw SQL — facilityId not in Drizzle schema object)
+  const linkedUsersResult = await db.execute(
+    sql`SELECT id FROM users WHERE facility_id = ${id} LIMIT 1`
+  );
+  if (linkedUsersResult.length > 0) {
     throw new Error("Cannot delete: this facility has admin users assigned. Remove them first.");
   }
+
 
   await db.delete(facilities).where(eq(facilities.id, id));
 }
@@ -830,15 +829,47 @@ export async function createFacilityAdmin(input: {
 }): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-
-  await db.insert(users).values({
-    email: input.email,
-    passwordHash: input.passwordHash,
-    name: input.name,
-    role: "facility_admin",
-    facilityId: input.facilityId,
-  });
+  // Use raw SQL — facility_id and role=facility_admin are live DB columns
+  // not yet reflected in the Drizzle schema object.
+  await db.execute(
+    sql`INSERT INTO users (email, password_hash, name, role, facility_id, created_at, updated_at, last_signed_in)
+        VALUES (${input.email}, ${input.passwordHash}, ${input.name}, 'facility_admin', ${input.facilityId}, NOW(), NOW(), NOW())`
+  );
 }
+
+/** super_admin only: update an existing facility_admin's assigned facility */
+export async function reassignFacilityAdmin(userId: number, facilityId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.execute(
+    sql`UPDATE users SET facility_id = ${facilityId}, updated_at = NOW() WHERE id = ${userId}`
+  );
+}
+
+/** super_admin only: list all facility_admin and admin users */
+export async function getFacilityAdmins(): Promise<
+  { id: number; email: string; name: string | null; role: string; facilityId: number | null; createdAt: Date }[]
+> {
+  const db = await getDb();
+  if (!db) return [];
+  const rows = await db.execute(
+    sql`SELECT id, email, name, role, facility_id AS "facilityId", created_at AS "createdAt"
+        FROM users
+        WHERE role IN ('facility_admin', 'admin')
+        ORDER BY created_at DESC`
+  );
+  return rows as { id: number; email: string; name: string | null; role: string; facilityId: number | null; createdAt: Date }[];
+}
+
+/** super_admin only: remove a facility_admin user entirely */
+export async function deleteFacilityAdmin(userId: number): Promise<void> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.execute(
+    sql`DELETE FROM users WHERE id = ${userId} AND role IN ('facility_admin', 'admin')`
+  );
+}
+
 
 
 
