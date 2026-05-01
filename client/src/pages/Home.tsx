@@ -72,10 +72,10 @@ const SERVICE_META: Record<string, { Icon: React.FC; color: string; tagline: str
 
 // ─── How It Works ─────────────────────────────────────────────────────────────
 const HOW_STEPS = [
-  { icon: CalendarDays, title: "Pick a slot", desc: "Choose your service, date, and time" },
-  { icon: CreditCard, title: "Pay via UPI", desc: "Scan QR and transfer the amount" },
-  { icon: Zap, title: "Upload proof", desc: "Share your payment screenshot" },
-  { icon: CheckCircle2, title: "Get confirmed", desc: "Coach reviews and confirms your booking" },
+  { icon: CalendarDays, title: "Choose your slot", desc: "Pick your service, date, and time" },
+  { icon: CreditCard, title: "Pay advance online", desc: "Secure Razorpay payment — takes 30 seconds" },
+  { icon: CheckCircle2, title: "Booking confirmed", desc: "Your slot is locked instantly after payment" },
+  { icon: Zap, title: "Pay balance at ground", desc: "Settle the remaining amount when you arrive" },
 ];
 
 // ─── Landing Page ─────────────────────────────────────────────────────────────
