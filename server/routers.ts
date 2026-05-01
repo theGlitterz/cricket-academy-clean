@@ -814,19 +814,27 @@ const paymentsRouter = router({
       const slot = await getSlotById(input.slotId);
       let coachWhatsAppUrl: string | null = null;
       if (facility?.coachWhatsApp) {
+           const advanceAmt = Number((service as { advanceAmount?: string | null }).advanceAmount ?? 0);
         const message = buildCoachNewBookingAlert({
           playerName: input.playerName,
+          playerWhatsApp: input.playerWhatsApp,
           serviceName: service?.name ?? "Unknown",
           bookingDate: slot?.date ?? "",
           startTime: slot?.startTime ?? "",
           endTime: slot?.endTime ?? "",
           amount: Number(service?.price ?? 0),
-          advance: Number((service as { advanceAmount?: string | null }).advanceAmount ?? 0),
-          remaining: Number(service?.price ?? 0) - Number((service as { advanceAmount?: string | null }).advanceAmount ?? 0),
+          advance: advanceAmt,
+          remaining: Number(service?.price ?? 0) - advanceAmt,
           referenceId: bookingResult.referenceId,
           facilityName: facility.facilityName ?? "BestCricketAcademy",
           coachWhatsApp: facility.coachWhatsApp,
         });
+        // Safe log: confirm playerWhatsApp is present (masked)
+        const maskedWa = input.playerWhatsApp.length > 4
+          ? `****${input.playerWhatsApp.slice(-4)}`
+          : "****";
+        console.log(`[Coach WA] Sending booking alert. Player WA present: ${!!input.playerWhatsApp} (${maskedWa})`);
+
         // sendCoachWhatsApp handles all error logging internally and never throws
         await sendCoachWhatsApp(message, facility.coachWhatsApp);
         coachWhatsAppUrl = `https://wa.me/${facility.coachWhatsApp.replace(/\D/g, "" )}`;
