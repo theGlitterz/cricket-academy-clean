@@ -11,7 +11,7 @@ import {
 } from "drizzle-orm/pg-core";
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
-export const roleEnum = pgEnum("role", ["user", "admin"]);
+export const roleEnum = pgEnum("role", ["user", "admin", "facility_admin", "super_admin"]);
 export const availabilityStatusEnum = pgEnum("availability_status", [
   "available",
   "booked",
@@ -42,10 +42,13 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash").notNull(),
   name: text("name"),
   role: roleEnum("role").default("admin").notNull(),
+  /** Assigned facility for facility_admin users. Null for super_admin. */
+  facilityId: integer("facility_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   lastSignedIn: timestamp("last_signed_in").defaultNow().notNull(),
 });
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = typeof users.$inferInsert;
 
