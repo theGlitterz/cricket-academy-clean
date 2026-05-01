@@ -3,10 +3,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
-import { useState, useEffect, useRef } from "react";
-import { Save, Upload, Loader2, CheckCircle2, Building2, Phone, MapPin, Clock, CreditCard, QrCode } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Save, Loader2, Building2, Phone, MapPin } from "lucide-react";
 import AdminLayout from "./AdminLayout";
 
 // ─── Section wrapper ──────────────────────────────────────────────────────────
@@ -44,29 +43,22 @@ export default function AdminSettings() {
     coachName: "",
     coachWhatsApp: "",
     address: "",
-    upiId: "",
-    paymentInstructions: "",
     workingHours: "",
     googleMapsUrl: "",
   });
 
-  const [qrUploading, setQrUploading] = useState(false);
-  const [qrUrl, setQrUrl] = useState<string | null>(null);
-  const qrRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (facility) {
-      setForm({
+        setForm({
         facilityName: facility.facilityName ?? "",
         coachName: facility.coachName ?? "",
         coachWhatsApp: facility.coachWhatsApp ?? "",
         address: facility.address ?? "",
-        upiId: facility.upiId ?? "",
-        paymentInstructions: facility.paymentInstructions ?? "",
         workingHours: facility.workingHours ?? "",
         googleMapsUrl: facility.googleMapsUrl ?? "",
       });
-      setQrUrl(facility.upiQrImageUrl ?? null);
+
     }
   }, [facility]);
 
@@ -78,46 +70,16 @@ export default function AdminSettings() {
     onError: (err: { message: string }) => toast.error(err.message),
   });
 
-  const uploadQrMutation = trpc.facility.uploadQrCode.useMutation({
-    onSuccess: (data: { url: string }) => {
-      setQrUrl(data.url);
-      setQrUploading(false);
-      toast.success("QR code uploaded!");
-      utils.facility.get.invalidate();
-    },
-    onError: (err: { message: string }) => {
-      toast.error(err.message);
-      setQrUploading(false);
-    },
-  });
-
   const handleSave = () => {
     updateMutation.mutate({
       facilityName: form.facilityName || undefined,
       coachName: form.coachName || undefined,
       coachWhatsApp: form.coachWhatsApp || undefined,
       address: form.address || undefined,
-      upiId: form.upiId || undefined,
-      paymentInstructions: form.paymentInstructions || undefined,
       workingHours: form.workingHours || undefined,
       googleMapsUrl: form.googleMapsUrl || undefined,
     });
-  };
 
-  const handleQrUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    if (file.size > 2 * 1024 * 1024) {
-      toast.error("QR image too large. Max 2MB.");
-      return;
-    }
-    setQrUploading(true);
-    const reader = new FileReader();
-    reader.onload = () => {
-      const base64 = (reader.result as string).split(",")[1];
-      uploadQrMutation.mutate({ fileBase64: base64, mimeType: file.type });
-    };
-    reader.readAsDataURL(file);
   };
 
   const set = (key: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
@@ -224,73 +186,6 @@ export default function AdminSettings() {
               placeholder="https://maps.google.com/..."
               className="rounded-xl"
             />
-          </div>
-        </Section>
-
-        {/* ── Payment / UPI ── */}
-        <Section icon={CreditCard} title="Payment — UPI">
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">UPI ID</Label>
-            <Input
-              value={form.upiId}
-              onChange={set("upiId")}
-              placeholder="e.g. coach@upi or 9876543210@paytm"
-              className="rounded-xl"
-            />
-          </div>
-          <div className="space-y-1.5">
-            <Label className="text-xs text-muted-foreground">Payment Instructions</Label>
-            <Textarea
-              value={form.paymentInstructions}
-              onChange={set("paymentInstructions")}
-              rows={2}
-              placeholder="e.g. Pay and upload screenshot to confirm your booking"
-              className="rounded-xl resize-none"
-            />
-          </div>
-        </Section>
-
-        {/* ── UPI QR Code ── */}
-        <Section icon={QrCode} title="UPI QR Code">
-          <div className="flex flex-col items-center gap-3">
-            {qrUrl ? (
-              <div className="relative">
-                <img
-                  src={qrUrl}
-                  alt="UPI QR Code"
-                  className="w-36 h-36 object-contain rounded-xl border border-border bg-white p-1"
-                />
-                <p className="text-xs text-green-600 flex items-center gap-1 mt-1 justify-center">
-                  <CheckCircle2 className="w-3.5 h-3.5" />
-                  QR code uploaded
-                </p>
-              </div>
-            ) : (
-              <div className="w-36 h-36 rounded-xl border-2 border-dashed border-border flex flex-col items-center justify-center bg-muted/30">
-                <QrCode className="w-8 h-8 text-muted-foreground/40 mb-1" />
-                <p className="text-[11px] text-muted-foreground text-center px-2">No QR uploaded yet</p>
-              </div>
-            )}
-            <input
-              ref={qrRef}
-              type="file"
-              accept="image/*"
-              className="hidden"
-              onChange={handleQrUpload}
-            />
-            <Button
-              variant="outline"
-              className="rounded-xl w-full"
-              onClick={() => qrRef.current?.click()}
-              disabled={qrUploading || uploadQrMutation.isPending}
-            >
-              {qrUploading || uploadQrMutation.isPending ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Uploading...</>
-              ) : (
-                <><Upload className="w-4 h-4 mr-2" />{qrUrl ? "Replace QR Code" : "Upload QR Code"}</>
-              )}
-            </Button>
-            <p className="text-[11px] text-muted-foreground text-center">Upload a clear image of your UPI QR code. Max 2MB.</p>
           </div>
         </Section>
 
