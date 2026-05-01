@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Badge } from "@/components/ui/badge";
 import {
   Building2, UserPlus, ShieldAlert, Loader2,
-  CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Trash2, X,
+  CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Trash2, X,Users,
 } from "lucide-react";
 
 function CreateFacilityForm({ onCreated }: { onCreated: () => void }) {
@@ -101,14 +101,21 @@ function CreateFacilityAdminForm({ facilities }: { facilities: { id: number; fac
   const [success, setSuccess] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+   const utils = trpc.useUtils();
   const createAdmin = trpc.superAdmin.createFacilityAdmin.useMutation({
-    onSuccess: () => {
-      setSuccess("Facility admin account created. They can now log in at /admin/login.");
+    onSuccess: (data) => {
+      if (data.reassigned) {
+        setSuccess("Existing admin reassigned to the selected facility. Their password is unchanged.");
+      } else {
+        setSuccess("Facility admin account created. They can now log in at /admin/login.");
+      }
       setError(null);
       setForm({ email: "", name: "", password: "", facilityId: "" });
+      utils.superAdmin.listAdmins.invalidate();
     },
     onError: (err) => { setError(err.message); setSuccess(null); },
   });
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -257,6 +264,83 @@ function FacilityList({
 
 
 
+function FacilityAdminsPanel({ facilities }: { facilities: { id: number; facilityName: string }[] }) {
+  const utils = trpc.useUtils();
+  const { data: admins = [], isLoading } = trpc.superAdmin.listAdmins.useQuery();
+  const [removingId, setRemovingId] = useState<number | null>(null);
+
+  const removeMutation = trpc.superAdmin.removeAdmin.useMutation({
+    onSuccess: () => {
+      toast.success("Admin removed.");
+      utils.superAdmin.listAdmins.invalidate();
+    },
+    onError: (err) => toast.error(err.message ?? "Failed to remove admin"),
+    onSettled: () => setRemovingId(null),
+  });
+
+  const facilityName = (id: number | null) =>
+    id == null ? "—" : (facilities.find((f) => f.id === id)?.facilityName ?? `Facility #${id}`);
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4 text-primary" />
+          <CardTitle className="text-base">Facility Admins</CardTitle>
+        </div>
+        <CardDescription>{admins.length} admin{admins.length !== 1 ? "s" : ""} registered</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex items-center justify-center py-8">
+            <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : admins.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">No facility admins yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {admins.map((admin) => (
+              <div key={admin.id} className="flex items-start justify-between p-3 rounded-xl border border-border bg-card gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm text-foreground">{admin.name ?? admin.email}</span>
+                    <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">{admin.role}</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-0.5">{admin.email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Facility: <span className="font-medium">{facilityName(admin.facilityId)}</span>
+                    {admin.createdAt && (
+                      <span className="ml-2 text-[11px]">
+                        · Created {new Date(admin.createdAt).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}
+                      </span>
+                    )}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7 p-0 shrink-0"
+                  disabled={removingId === admin.id}
+                  onClick={() => {
+                    if (confirm(`Remove admin "${admin.email}"? They will lose all access.`)) {
+                      setRemovingId(admin.id);
+                      removeMutation.mutate({ userId: admin.id });
+                    }
+                  }}
+                >
+                  {removingId === admin.id
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Trash2 className="w-3.5 h-3.5" />}
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function SuperAdmin() {
   const { user } = useAuth();
   const utils = trpc.useUtils();
@@ -294,8 +378,10 @@ export default function SuperAdmin() {
           <FacilityList facilities={facilities} loading={isLoading} onDeleted={handleFacilityCreated} />
           </CardContent>
         </Card>
+               <FacilityAdminsPanel facilities={facilities} />
         <CreateFacilityForm onCreated={handleFacilityCreated} />
         <CreateFacilityAdminForm facilities={facilities} />
+
       </div>
     </AdminLayout>
   );
