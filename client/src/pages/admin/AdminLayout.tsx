@@ -92,7 +92,7 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
   }
 
   // ── Not admin or super admin ──
-  if (user?.role !== "admin" && user?.role !== "super_admin") {
+  if (user?.role !== "admin" && user?.role !== "super_admin" && user?.role !== "facility_admin") {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-4 bg-background">
         <div className="w-14 h-14 rounded-2xl bg-red-100 flex items-center justify-center">
@@ -115,8 +115,8 @@ export default function AdminLayout({ children, title }: AdminLayoutProps) {
 
   // ── Admin shell ──
   const NAV_ITEMS = user?.role === "super_admin"
-  ? [...BASE_NAV_ITEMS, SUPER_ADMIN_NAV]
-  : BASE_NAV_ITEMS;
+    ? [...BASE_NAV_ITEMS, SUPER_ADMIN_NAV]
+    : BASE_NAV_ITEMS;
   const currentNav = NAV_ITEMS.find((n) => n.href === location);
 
   return (
