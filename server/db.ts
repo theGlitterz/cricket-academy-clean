@@ -86,25 +86,26 @@ export async function touchUserSignIn(id: number): Promise<void> {
 // ─── Facilities ───────────────────────────────────────────────────────────────
 
 /** Get the single BestCricketAcademy facility record. */
-export async function getFacility(): Promise<Facility | undefined> {
+export async function getFacility(facilityId = FACILITY_ID): Promise<Facility | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db
     .select()
     .from(facilities)
-    .where(eq(facilities.id, FACILITY_ID))
+    .where(eq(facilities.id, facilityId))
     .limit(1);
   return result[0] ?? undefined;
 }
 
+
 /** Upsert facility settings. Creates if not exists (id=1), updates otherwise. */
-export async function upsertFacility(data: Partial<InsertFacility>): Promise<void> {
+export async function upsertFacility(data: Partial<InsertFacility>, facilityId = FACILITY_ID): Promise<void> {
   const db = await getDb();
   if (!db) return;
-  const existing = await getFacility();
+  const existing = await getFacility(facilityId);
   if (!existing) {
     await db.insert(facilities).values({
-      id: FACILITY_ID,
+      id: facilityId,
       facilityName: data.facilityName ?? "BestCricketAcademy",
       ...data,
     });
@@ -112,9 +113,10 @@ export async function upsertFacility(data: Partial<InsertFacility>): Promise<voi
     await db
       .update(facilities)
       .set({ ...data, updatedAt: new Date() })
-      .where(eq(facilities.id, FACILITY_ID));
+      .where(eq(facilities.id, facilityId));
   }
 }
+
 
 // ─── Services ─────────────────────────────────────────────────────────────────
 
