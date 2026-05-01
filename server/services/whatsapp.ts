@@ -36,6 +36,7 @@
 
 export interface BookingMessageData {
   playerName: string;
+  playerWhatsApp: string;  // customer's WhatsApp — shown in coach notification
   serviceName: string;
   bookingDate: string; // e.g. "15 Apr 2026"
   startTime: string;   // e.g. "6:00 AM"
@@ -47,6 +48,7 @@ export interface BookingMessageData {
   advance: number;
   remaining: number;
 }
+
 
 /**
  * Message sent to the player after they submit a booking request.
@@ -110,22 +112,23 @@ export function buildCoachNewBookingAlert(data: BookingMessageData): string {
   return (
     `🏏 *New Booking Confirmed*\n\n` +
 
-    `👤 ${data.playerName}\n` +
-    `📞 ${data.coachWhatsApp}\n\n` +
+    `👤 *Player:* ${data.playerName}\n` +
+    `📞 *WhatsApp:* ${data.playerWhatsApp}\n\n` +
 
     `📅 ${data.bookingDate}\n` +
     `⏰ ${data.startTime} – ${data.endTime}\n\n` +
 
     `🎯 ${data.serviceName}\n` +
 
-    `💰 Advance: ₹${data.advance}\n` +
-    `💳 Remaining: ₹${data.remaining}\n\n` +
+    `💰 Advance Paid: ₹${data.advance}\n` +
+    `💳 Remaining at Ground: ₹${data.remaining}\n\n` +
 
-    `🆔 ${data.referenceId}\n\n` +
+    `🆔 Ref: ${data.referenceId}\n\n` +
 
     `✅ Slot reserved`
   );
 }
+
 
 /**
  * Builds a wa.me deep link with a pre-filled message.
