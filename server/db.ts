@@ -885,14 +885,32 @@ export async function getFacilityAdmins(): Promise<
 
 }
 
-/** super_admin only: remove a facility_admin user entirely */
-export async function deleteFacilityAdmin(userId: number): Promise<void> {
+/** super_admin only: remove a facility_admin user entirely.
+ *  Only deletes users with role facility_admin or admin.
+ *  Never deletes super_admin. Caller must pass logged-in user id to prevent self-deletion.
+ */
+export async function deleteFacilityAdmin(userId: number, requestingUserId: number): Promise<void> {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.execute(
-    sql`DELETE FROM users WHERE id = ${userId} AND role IN ('facility_admin', 'admin')`
-  );
+  if (userId === requestingUserId) {
+    throw new Error("You cannot remove your own admin account.");
+  }
+  // Use Drizzle ORM — handles native enum comparison correctly
+  const deleted = await db
+    .delete(users)
+    .where(
+      and(
+        eq(users.id, userId),
+        inArray(users.role, ["facility_admin", "admin"])
+      )
+    )
+    .returning({ id: users.id });
+  console.log(`[deleteFacilityAdmin] userId=${userId} deleted=${deleted.length > 0}`);
+  if (deleted.length === 0) {
+    throw new Error("User not found or cannot be removed (may be a super_admin or already deleted).");
+  }
 }
+
 
 
 
