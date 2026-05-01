@@ -28,6 +28,17 @@ declare global {
     Razorpay: new (options: Record<string, unknown>) => { open(): void };
   }
 }
+// ─── Helpers ─────────────────────────────────────────────────────────────────
+/** Converts "HH:MM" 24-hour string to "H:MM AM/PM" for display only. */
+function formatTime(t: string): string {
+  if (!t) return t;
+  const [h, m] = t.split(":").map(Number);
+  const period = h >= 12 ? "PM" : "AM";
+  const hour = h > 12 ? h - 12 : h === 0 ? 12 : h;
+  return `${hour}:${String(m).padStart(2, "0")} ${period}`;
+}
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type Step = "service" | "slot" | "details" | "payment" | "done";
@@ -248,12 +259,6 @@ function SlotStep({
     };
   };
 
-  const formatTime = (t: string) => {
-    const [h, m] = t.split(":").map(Number);
-    const period = h >= 12 ? "PM" : "AM";
-    const hour = h > 12 ? h - 12 : h === 0 ? 12 : h;
-    return `${hour}:${String(m).padStart(2, "0")} ${period}`;
-  };
 
   return (
     <div>
@@ -403,7 +408,7 @@ function DetailsStep({
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Time</span>
-            <span className="font-semibold text-foreground">{booking.slotStart} – {booking.slotEnd}</span>
+            <span className="font-semibold text-foreground">{formatTime(booking.slotStart ?? "")} – {formatTime(booking.slotEnd ?? "")}</span>
           </div>
                   <div className="border-t border-border/50 pt-1.5 mt-1.5 space-y-1.5">
             <div className="flex justify-between text-sm">
@@ -622,7 +627,7 @@ function PaymentStep({
             <p className="text-xs text-white/60">
               {booking.slotDate && new Date(booking.slotDate + "T00:00:00").toLocaleDateString("en-IN", { day: "numeric", month: "short" })}
             </p>
-            <p className="text-sm font-semibold text-white mt-0.5">{booking.slotStart} – {booking.slotEnd}</p>
+            <p className="text-sm font-semibold text-white mt-0.5">{formatTime(booking.slotStart ?? "")} – {formatTime(booking.slotEnd ?? "")}</p>
           </div>
         </div>
         <div className="border-t border-white/20 pt-3 flex gap-6">
@@ -677,7 +682,7 @@ function PaymentStep({
 
 // ─── Step 5: Done ─────────────────────────────────────────────────────────────
 function DoneStep({ booking, facility }: { booking: BookingState; facility?: { coachWhatsApp?: string | null; facilityName?: string | null } | null }) {
-  const shareText = `I've booked a ${booking.serviceName} session at BestCricketAcademy on ${booking.slotDate} at ${booking.slotStart}. Reference: ${booking.referenceId}`;
+  const shareText = `I've booked a ${booking.serviceName} session at BestCricketAcademy on ${booking.slotDate} at ${formatTime(booking.slotStart ?? "")}. Reference: ${booking.referenceId}`;
   const priceNum = parseFloat(booking.servicePrice ?? "0");
   const advanceNum = parseFloat(booking.serviceAdvance ?? "0");
   const remainingNum = priceNum - advanceNum;
@@ -735,7 +740,7 @@ function DoneStep({ booking, facility }: { booking: BookingState; facility?: { c
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Time</span>
-            <span className="font-medium text-foreground">{booking.slotStart} – {booking.slotEnd}</span>
+            <span className="font-medium text-foreground">{formatTime(booking.slotStart ?? "")} – {formatTime(booking.slotEnd ?? "")}</span>
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">Name</span>
