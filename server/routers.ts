@@ -946,12 +946,15 @@ const superAdminRouter = router({
     return getFacilityAdmins();
   }),
 
-  removeAdmin: superAdminProcedure
+   removeAdmin: superAdminProcedure
     .input(z.object({ userId: z.number().int() }))
-    .mutation(async ({ input }) => {
-      await deleteFacilityAdmin(input.userId);
+    .mutation(async ({ input, ctx }) => {
+      console.log(`[SuperAdmin] Delete facility admin requested: userId=${input.userId} by=${ctx.user!.email}`);
+      await deleteFacilityAdmin(input.userId, ctx.user!.id);
+      console.log(`[SuperAdmin] Delete facility admin success: userId=${input.userId}`);
       return { success: true };
     }),
+
 });
 
 
