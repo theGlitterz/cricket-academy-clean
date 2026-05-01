@@ -825,13 +825,18 @@ export async function deleteFacility(id: number): Promise<void> {
     throw new Error("Cannot delete: this facility has bookings.");
   }
 
-    // Check for linked facility_admin users (raw SQL — facilityId not in Drizzle schema object)
+      // Check for linked facility_admin users — cast role to text to avoid native enum comparison issues
   const linkedUsersResult = await db.execute(
-    sql`SELECT id FROM users WHERE facility_id = ${id} LIMIT 1`
+    sql`SELECT id FROM users WHERE facility_id = ${id} AND role::text IN ('facility_admin', 'admin') LIMIT 1`
   );
-  if (linkedUsersResult.length > 0) {
+  const linkedUsersArray = Array.isArray(linkedUsersResult)
+    ? linkedUsersResult
+    : Array.from(linkedUsersResult as Iterable<unknown>);
+  console.log(`[deleteFacility] id=${id} linkedAdmins=${linkedUsersArray.length}`);
+  if (linkedUsersArray.length > 0) {
     throw new Error("Cannot delete: this facility has admin users assigned. Remove them first.");
   }
+
 
 
   await db.delete(facilities).where(eq(facilities.id, id));
