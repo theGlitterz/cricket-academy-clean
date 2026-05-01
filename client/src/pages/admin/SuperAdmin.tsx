@@ -5,11 +5,12 @@ import AdminLayout from "./AdminLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
   Building2, UserPlus, ShieldAlert, Loader2,
-  CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Trash2, X,Users,
+  CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Trash2, X, Users, Pencil,
 } from "lucide-react";
 
 function CreateFacilityForm({ onCreated }: { onCreated: () => void }) {
@@ -200,16 +201,40 @@ function FacilityList({
   loading,
   onDeleted,
 }: {
-  facilities: { id: number; facilityName: string; coachName: string | null; address: string | null; isActive: boolean }[];
+  facilities: { id: number; facilityName: string; coachName: string | null; address: string | null; coachWhatsApp?: string | null; googleMapsUrl?: string | null; isActive: boolean }[];
   loading: boolean;
   onDeleted?: () => void;
 }) {
+  const utils = trpc.useUtils();
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editForm, setEditForm] = useState({ facilityName: "", coachName: "", coachWhatsApp: "", address: "", googleMapsUrl: "" });
+
   const deleteMutation = trpc.facility.delete.useMutation({
     onSuccess: () => { toast.success("Facility deleted"); onDeleted?.(); },
     onError: (err) => toast.error(err.message ?? "Failed to delete facility"),
     onSettled: () => setDeletingId(null),
   });
+
+  const updateMutation = trpc.facility.update.useMutation({
+    onSuccess: () => {
+      toast.success("Facility updated.");
+      setEditingId(null);
+      utils.facility.listAll.invalidate();
+    },
+    onError: (err) => toast.error(err.message ?? "Failed to update facility"),
+  });
+
+  const startEdit = (f: typeof facilities[0]) => {
+    setEditForm({
+      facilityName: f.facilityName ?? "",
+      coachName: f.coachName ?? "",
+      coachWhatsApp: (f as { coachWhatsApp?: string | null }).coachWhatsApp ?? "",
+      address: f.address ?? "",
+      googleMapsUrl: (f as { googleMapsUrl?: string | null }).googleMapsUrl ?? "",
+    });
+    setEditingId(f.id);
+  };
 
   if (loading) {
     return (
@@ -224,38 +249,88 @@ function FacilityList({
   return (
     <div className="space-y-2">
       {facilities.map((f) => (
-        <div key={f.id} className="flex items-start justify-between p-3 rounded-xl border border-border bg-card gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <span className="font-semibold text-sm text-foreground">{f.facilityName}</span>
-              <Badge variant={f.isActive ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
-                {f.isActive ? "Active" : "Inactive"}
-              </Badge>
-              <span className="text-xs font-mono text-muted-foreground">ID: {f.id}</span>
+        <div key={f.id} className="rounded-xl border border-border bg-card">
+          <div className="flex items-start justify-between p-3 gap-3">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-sm text-foreground">{f.facilityName}</span>
+                <Badge variant={f.isActive ? "default" : "secondary"} className="text-[10px] px-1.5 py-0">
+                  {f.isActive ? "Active" : "Inactive"}
+                </Badge>
+                <span className="text-xs font-mono text-muted-foreground">ID: {f.id}</span>
+              </div>
+              {f.coachName && <p className="text-xs text-muted-foreground mt-0.5">{f.coachName}</p>}
+              {f.address && <p className="text-xs text-muted-foreground">{f.address}</p>}
             </div>
-            {f.coachName && <p className="text-xs text-muted-foreground mt-0.5">{f.coachName}</p>}
-            {f.address && <p className="text-xs text-muted-foreground">{f.address}</p>}
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {f.id === 1 ? (
-              <span className="text-[10px] text-muted-foreground italic px-2">Primary</span>
-            ) : (
+            <div className="flex items-center gap-1 shrink-0">
               <Button
                 size="sm"
                 variant="ghost"
-                className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
-                disabled={deletingId === f.id}
-                onClick={() => {
-                  if (confirm(`Delete "${f.facilityName}"? This cannot be undone.`)) {
-                    setDeletingId(f.id);
-                    deleteMutation.mutate({ id: f.id });
-                  }
-                }}
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+                onClick={() => editingId === f.id ? setEditingId(null) : startEdit(f)}
+                title="Edit facility"
               >
-                {deletingId === f.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                {editingId === f.id ? <X className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
               </Button>
-            )}
+              {f.id !== 1 && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-destructive hover:text-destructive hover:bg-destructive/10 h-7 w-7 p-0"
+                  disabled={deletingId === f.id}
+                  onClick={() => {
+                    if (confirm(`Delete "${f.facilityName}"? This cannot be undone.`)) {
+                      setDeletingId(f.id);
+                      deleteMutation.mutate({ id: f.id });
+                    }
+                  }}
+                >
+                  {deletingId === f.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                </Button>
+              )}
+            </div>
           </div>
+          {editingId === f.id && (
+            <div className="px-3 pb-3 border-t border-border pt-3 space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Facility Name</Label>
+                  <Input value={editForm.facilityName} onChange={(e) => setEditForm((p) => ({ ...p, facilityName: e.target.value }))} className="rounded-lg h-8 text-sm" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Coach Name</Label>
+                  <Input value={editForm.coachName} onChange={(e) => setEditForm((p) => ({ ...p, coachName: e.target.value }))} className="rounded-lg h-8 text-sm" />
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Coach WhatsApp</Label>
+                <Input value={editForm.coachWhatsApp} onChange={(e) => setEditForm((p) => ({ ...p, coachWhatsApp: e.target.value }))} placeholder="+919876543210" className="rounded-lg h-8 text-sm" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Address</Label>
+                <Textarea value={editForm.address} onChange={(e) => setEditForm((p) => ({ ...p, address: e.target.value }))} rows={2} className="rounded-lg text-sm resize-none" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">Google Maps URL</Label>
+                <Input value={editForm.googleMapsUrl} onChange={(e) => setEditForm((p) => ({ ...p, googleMapsUrl: e.target.value }))} placeholder="https://maps.google.com/..." className="rounded-lg h-8 text-sm" />
+              </div>
+              <Button
+                size="sm"
+                className="w-full rounded-lg"
+                disabled={updateMutation.isPending}
+                onClick={( ) => updateMutation.mutate({
+                  id: f.id,
+                  facilityName: editForm.facilityName || undefined,
+                  coachName: editForm.coachName || undefined,
+                  coachWhatsApp: editForm.coachWhatsApp || undefined,
+                  address: editForm.address || undefined,
+                  googleMapsUrl: editForm.googleMapsUrl || undefined,
+                })}
+              >
+                {updateMutation.isPending ? <><Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" />Saving…</> : "Save Changes"}
+              </Button>
+            </div>
+          )}
         </div>
       ))}
     </div>
