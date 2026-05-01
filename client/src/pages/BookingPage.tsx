@@ -309,8 +309,8 @@ function SlotStep({
 
       {/* Slot Grid */}
       <div>
-        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-          Available Slots —{" "}
+          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          Slots —{" "}
           {new Date(selectedDate + "T00:00:00").toLocaleDateString("en-IN", {
             weekday: "long", day: "numeric", month: "long",
           })}
@@ -322,22 +322,41 @@ function SlotStep({
           </div>
         ) : slots && slots.length > 0 ? (
           <div className="grid grid-cols-2 gap-2.5">
-            {slots.map((slot) => (
-              <button
-                key={slot.id}
-                onClick={() => onSelect({ id: slot.id, date: selectedDate, start: slot.startTime, end: slot.endTime })}
-                className="bg-white border-2 border-border rounded-2xl p-3.5 text-left hover:border-primary/50 hover:bg-primary/5 active:scale-[0.96] transition-all duration-150 group"
-              >
-                <p className="font-bold text-sm text-foreground group-hover:text-primary transition-colors">
-                  {formatTime(slot.startTime)}
-                </p>
-                <p className="text-xs text-muted-foreground mt-0.5">to {formatTime(slot.endTime)}</p>
-                <div className="mt-2 flex items-center gap-1">
-                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                  <span className="text-[11px] text-emerald-700 font-medium">Available</span>
-                </div>
-              </button>
-            ))}
+                        {slots.map((slot) => {
+              const isBooked = slot.availabilityStatus === "booked";
+              return (
+                <button
+                  key={slot.id}
+                  disabled={isBooked}
+                  onClick={() => !isBooked && onSelect({ id: slot.id, date: selectedDate, start: slot.startTime, end: slot.endTime })}
+                  className={[
+                    "border-2 rounded-2xl p-3.5 text-left transition-all duration-150",
+                    isBooked
+                      ? "bg-red-50 border-red-200 cursor-not-allowed opacity-80"
+                      : "bg-white border-border hover:border-primary/50 hover:bg-primary/5 active:scale-[0.96] group cursor-pointer",
+                  ].join(" ")}
+                >
+                  <p className={["font-bold text-sm", isBooked ? "text-red-400" : "text-foreground group-hover:text-primary transition-colors"].join(" ")}>
+                    {formatTime(slot.startTime)}
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5">to {formatTime(slot.endTime)}</p>
+                  <div className="mt-2 flex items-center gap-1">
+                    {isBooked ? (
+                      <>
+                        <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                        <span className="text-[11px] text-red-500 font-medium">Booked</span>
+                      </>
+                    ) : (
+                      <>
+                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                        <span className="text-[11px] text-emerald-700 font-medium">Available</span>
+                      </>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+
           </div>
         ) : (
           <div className="text-center py-12 bg-muted/40 rounded-2xl">
