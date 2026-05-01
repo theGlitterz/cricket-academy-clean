@@ -212,7 +212,7 @@ export async function getAvailableSlots(
   date: string,
   facilityId = FACILITY_ID
 ): Promise<Slot[]> {
-  await expireStaleBookings(); 
+  await expireStaleBookings();
   const db = await getDb();
   if (!db) return [];
   return db
@@ -228,6 +228,34 @@ export async function getAvailableSlots(
     )
     .orderBy(slots.startTime);
 }
+
+/**
+ * Public: get all slots for a service + date (available AND booked).
+ * Used by the customer slot picker to show ground activity.
+ * Blocked slots are excluded — only available and booked are shown.
+ */
+export async function getAllSlotsForServiceAndDate(
+  serviceId: number,
+  date: string,
+  facilityId = FACILITY_ID
+): Promise<Slot[]> {
+  await expireStaleBookings();
+  const db = await getDb();
+  if (!db) return [];
+  return db
+    .select()
+    .from(slots)
+    .where(
+      and(
+        eq(slots.facilityId, facilityId),
+        eq(slots.serviceId, serviceId),
+        eq(slots.date, date),
+        inArray(slots.availabilityStatus, ["available", "booked"])
+      )
+    )
+    .orderBy(slots.startTime);
+}
+
 
 /**
  * Get all slots for a date range (admin view — shows all statuses).
