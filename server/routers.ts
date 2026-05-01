@@ -197,17 +197,27 @@ const authRouter = router({
 });
 
 // ─── Facility router ──────────────────────────────────────────────────────────
-
 const facilityRouter = router({
   /** Public: get facility info (name, contact, working hours) — always default facility */
   get: publicProcedure.query(async () => {
     return (await getFacility()) ?? null;
   }),
 
-  /** Admin: update facility settings — scoped to logged-in user's facility */
+  /** Admin: get facility settings scoped to the logged-in user's facility */
+  getForAdmin: adminProcedure.query(async ({ ctx }) => {
+    const facilityId = resolveFacilityId(ctx.user!);
+    console.log(`[facility.getForAdmin] user=${ctx.user!.email} facilityId=${facilityId}`);
+    return (await getFacility(facilityId)) ?? null;
+  }),
+
+  /** Admin: update facility settings.
+   *  super_admin must pass explicit `id` to target a specific facility.
+   *  facility_admin/admin always use their own facilityId; `id` is ignored.
+   */
   update: adminProcedure
     .input(
       z.object({
+        id: z.number().int().optional(),
         facilityName: z.string().min(1).optional(),
         coachName: z.string().optional(),
         coachWhatsApp: z.string().optional(),
@@ -220,8 +230,19 @@ const facilityRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const facilityId = resolveFacilityId(ctx.user!);
-      await upsertFacility(input, facilityId);
+      const user = ctx.user!;
+      let facilityId: number;
+      if (user.role === "super_admin") {
+        if (!input.id) {
+          throw new TRPCError({ code: "BAD_REQUEST", message: "super_admin must provide a facility id to update." });
+        }
+        facilityId = input.id;
+      } else {
+        facilityId = resolveFacilityId(user);
+      }
+      console.log(`[facility.update] user=${user.email} role=${user.role} targeting facilityId=${facilityId}`);
+      const { id: _ignored, ...data } = input;
+      await upsertFacility(data, facilityId);
       return { success: true };
     }),
 
@@ -274,6 +295,7 @@ const facilityRouter = router({
       return { success: true };
     }),
 });
+
 
 // ─── Services router ──────────────────────────────────────────────────────────
 
