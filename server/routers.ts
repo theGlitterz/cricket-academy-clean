@@ -47,6 +47,7 @@ import {
   getAllServices,
   getActiveServices,
   getAvailableSlots,
+  getAllSlotsForServiceAndDate,
   getBookingByReference,
   getBookingById,
   getBookingStats,
@@ -352,7 +353,7 @@ const slotsRouter = router({
    * Public: get available slots for a service on a given date.
    * Only returns slots with availabilityStatus='available'.
    */
-  getAvailable: publicProcedure
+   getAvailable: publicProcedure
     .input(
       z.object({
         serviceId: z.number().int(),
@@ -360,8 +361,11 @@ const slotsRouter = router({
       })
     )
     .query(async ({ input }) => {
-      return getAvailableSlots(input.serviceId, input.date, FACILITY_ID);
+      // Returns all slots for the date (available + booked) so customers can
+      // see ground activity. Frontend disables booked slots visually.
+      return getAllSlotsForServiceAndDate(input.serviceId, input.date, FACILITY_ID);
     }),
+
 
   /** Admin: get all slots for a date range (all statuses) — scoped to user's facility */
   getForRange: adminProcedure
