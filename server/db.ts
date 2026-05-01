@@ -869,12 +869,15 @@ export async function getFacilityAdmins(): Promise<
   const db = await getDb();
   if (!db) return [];
   const rows = await db.execute(
-    sql`SELECT id, email, name, role, facility_id AS "facilityId", created_at AS "createdAt"
+    sql`SELECT id, email, name, role::text AS role, facility_id AS "facilityId", created_at AS "createdAt"
         FROM users
-        WHERE role IN ('facility_admin', 'admin')
+        WHERE role::text IN ('facility_admin', 'admin')
         ORDER BY created_at DESC`
   );
-  return rows as { id: number; email: string; name: string | null; role: string; facilityId: number | null; createdAt: Date }[];
+  const result = Array.isArray(rows) ? rows : Array.from(rows as Iterable<unknown>);
+  console.log(`[getFacilityAdmins] raw row count: ${result.length}`);
+  return result as { id: number; email: string; name: string | null; role: string; facilityId: number | null; createdAt: Date }[];
+
 }
 
 /** super_admin only: remove a facility_admin user entirely */
