@@ -35,7 +35,7 @@ function Section({
 }
 
 export default function AdminSettings() {
-  const { data: facility, isLoading } = trpc.facility.get.useQuery();
+  const { data: facility, isLoading } = trpc.facility.getForAdmin.useQuery();
   const settings = facility;
   const utils = trpc.useUtils();
 
@@ -66,7 +66,7 @@ export default function AdminSettings() {
   const updateMutation = trpc.facility.update.useMutation({
     onSuccess: () => {
       toast.success("Settings saved!");
-      utils.facility.get.invalidate();
+      utils.facility.getForAdmin.invalidate();
     },
     onError: (err: { message: string }) => toast.error(err.message),
   });
