@@ -72,9 +72,23 @@ export async function createUser(user: InsertUser): Promise<void> {
 export async function getUserByEmail(email: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.email, email)).limit(1);
-  return result[0] ?? undefined;
+  // Use raw SQL to ensure facility_id and all live columns are selected,
+  // even if the Drizzle schema object is temporarily out of sync.
+  const rows = await db.execute(
+    sql`SELECT id, email, password_hash AS "passwordHash", name, role,
+               facility_id AS "facilityId",
+               created_at AS "createdAt", updated_at AS "updatedAt",
+               last_signed_in AS "lastSignedIn"
+        FROM users
+        WHERE email = ${email}
+        LIMIT 1`
+  );
+  const row = (rows as unknown[])[0] as Record<string, unknown> | undefined;
+  if (!row) return undefined;
+  console.log(`[getUserByEmail] id=${row.id} email=${row.email} role=${row.role} facilityId=${row.facilityId ?? "null"}`);
+  return row as unknown as import("../drizzle/schema").User & { facilityId: number | null };
 }
+
 
 /** Update lastSignedIn timestamp for a user. */
 export async function touchUserSignIn(id: number): Promise<void> {
