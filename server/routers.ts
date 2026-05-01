@@ -68,11 +68,17 @@ import {
 // ─── Admin guard ──────────────────────────────────────────────────────────────
 
 const adminProcedure = protectedProcedure.use(({ ctx, next }) => {
- if (!ctx.user || (ctx.user.role !== "admin" && ctx.user.role !== "super_admin")) {
-  throw new TRPCError({ code: "UNAUTHORIZED" });
-}
+  if (
+    !ctx.user ||
+    (ctx.user.role !== "admin" &&
+      ctx.user.role !== "super_admin" &&
+      ctx.user.role !== "facility_admin")
+  ) {
+    throw new TRPCError({ code: "UNAUTHORIZED" });
+  }
   return next({ ctx });
 });
+
 const superAdminProcedure = protectedProcedure.use(({ ctx, next }) => {
   if (!ctx.user || ctx.user.role !== "super_admin") {
     throw new TRPCError({ code: "UNAUTHORIZED" });
@@ -105,14 +111,19 @@ const authRouter = router({
 
       // ── 1. Try DB user first (facility_admin and super_admin created via UI) ──
       const dbUser = await getUserByEmail(emailLower);
-      if (dbUser && dbUser.passwordHash) {
+         if (dbUser && dbUser.passwordHash) {
+        console.log(`[adminLogin] email found: ${emailLower} | role: ${dbUser.role} | facilityId: ${dbUser.facilityId ?? "none"}`);
         if (dbUser.role !== "super_admin" && dbUser.role !== "facility_admin" && dbUser.role !== "admin") {
+          console.log(`[adminLogin] access denied — role "${dbUser.role}" not permitted`);
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
         }
         const passwordValid = await bcrypt.compare(input.password, dbUser.passwordHash);
         if (!passwordValid) {
+          console.log(`[adminLogin] access denied — password mismatch for ${emailLower}`);
           throw new TRPCError({ code: "UNAUTHORIZED", message: "Invalid email or password" });
         }
+        console.log(`[adminLogin] access granted — role: ${dbUser.role}, facilityId: ${dbUser.facilityId ?? "none"}`);
+
         const token = await signSession({
           userId: dbUser.id,
           email: dbUser.email,
