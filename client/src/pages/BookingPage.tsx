@@ -653,7 +653,7 @@ function PaymentStep({
       </Button>
 
       {/* Instructions */}
-      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-4">
+      <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 mb-3">
         <p className="text-xs font-semibold text-amber-800 mb-1.5">Important</p>
         <ul className="text-xs text-amber-700 space-y-1">
           <li>• Pay the advance to lock your slot</li>
@@ -661,6 +661,16 @@ function PaymentStep({
           <li>• Pay the remaining ₹{remainingAmount.toLocaleString("en-IN")} at the ground</li>
         </ul>
       </div>
+
+      {/* Rain Policy */}
+      <div className="bg-blue-50 border border-blue-200 rounded-2xl p-4 mb-4">
+        <p className="text-xs font-semibold text-blue-800 mb-1.5">Rain Policy</p>
+        <p className="text-xs text-blue-700 leading-relaxed">
+          If rain starts before the first innings is complete, half ground rent is payable. If rain starts after one innings is complete, full ground rent is payable. If rain starts before the match start time, the booking can be rescheduled subject to ground availability.
+        </p>
+        <p className="text-[11px] text-blue-500 mt-1.5">*Rain policy applies to ground bookings only.</p>
+      </div>
+
           </div>
   );
 }
