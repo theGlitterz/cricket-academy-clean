@@ -28,6 +28,9 @@ import {
   touchUserSignIn,
   createFacility,
   createFacilityAdmin,
+  reassignFacilityAdmin,
+  getFacilityAdmins,
+  deleteFacilityAdmin,
   getAllFacilities,
 } from "./db";
 import bcrypt from "bcryptjs";
@@ -880,20 +883,47 @@ const superAdminRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const existing = await getUserByEmail(input.email.toLowerCase());
+      const emailLower = input.email.toLowerCase();
+      const existing = await getUserByEmail(emailLower);
+
       if (existing) {
-        throw new TRPCError({ code: "CONFLICT", message: "A user with this email already exists" });
+        // Allow reassigning an existing facility_admin to a different facility
+        const existingRole = (existing as { role: string }).role;
+        if (existingRole !== "facility_admin" && existingRole !== "admin") {
+          throw new TRPCError({
+            code: "CONFLICT",
+            message: `A user with this email already exists with role "${existingRole}". Cannot reassign.`,
+          });
+        }
+        // Reassign to new facility (no password change — existing password kept)
+        await reassignFacilityAdmin(existing.id, input.facilityId);
+        console.log(`[superAdmin] Reassigned existing user ${emailLower} (id=${existing.id}) to facilityId=${input.facilityId}`);
+        return { success: true, reassigned: true };
       }
+
       const hash = await bcrypt.hash(input.password, 10);
       await createFacilityAdmin({
-        email: input.email.toLowerCase(),
+        email: emailLower,
         passwordHash: hash,
         name: input.name,
         facilityId: input.facilityId,
       });
+      console.log(`[superAdmin] Created new facility_admin: ${emailLower} for facilityId=${input.facilityId}`);
+      return { success: true, reassigned: false };
+    }),
+
+  listAdmins: superAdminProcedure.query(async () => {
+    return getFacilityAdmins();
+  }),
+
+  removeAdmin: superAdminProcedure
+    .input(z.object({ userId: z.number().int() }))
+    .mutation(async ({ input }) => {
+      await deleteFacilityAdmin(input.userId);
       return { success: true };
     }),
 });
+
 
 export const appRouter = router({
   system: systemRouter,
