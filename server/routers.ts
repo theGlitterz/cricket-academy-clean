@@ -888,7 +888,16 @@ const paymentsRouter = router({
       const slot = await getSlotById(input.slotId);
       let coachWhatsAppUrl: string | null = null;
       if (facility?.coachWhatsApp) {
-        const advanceAmt = Number((service as { advanceAmount?: string | null }).advanceAmount ?? 0);
+        // Use slot-level price/advance if stored; fallback to service values
+        const slotPrice = (slot as { price?: number | null })?.price;
+        const slotAdvance = (slot as { advanceAmount?: number | null })?.advanceAmount;
+        const totalAmt = slotPrice != null && slotPrice > 0
+          ? slotPrice
+          : Number(service?.price ?? 0);
+        const advanceAmt = slotAdvance != null && slotAdvance > 0
+          ? slotAdvance
+          : Number((service as { advanceAmount?: string | null }).advanceAmount ?? 0);
+        console.log(`[Coach WA] amount=${totalAmt} advance=${advanceAmt} remaining=${totalAmt - advanceAmt} (slotPrice=${slotPrice ?? "null"} slotAdvance=${slotAdvance ?? "null"})`);
         const message = buildCoachNewBookingAlert({
           playerName: input.playerName,
           playerWhatsApp: input.playerWhatsApp,
@@ -896,13 +905,14 @@ const paymentsRouter = router({
           bookingDate: slot?.date ?? "",
           startTime: slot?.startTime ?? "",
           endTime: slot?.endTime ?? "",
-          amount: Number(service?.price ?? 0),
+          amount: totalAmt,
           advance: advanceAmt,
-          remaining: Number(service?.price ?? 0) - advanceAmt,
+          remaining: totalAmt - advanceAmt,
           referenceId: bookingResult.referenceId,
           facilityName: facility.facilityName ?? "BestCricketAcademy",
           coachWhatsApp: facility.coachWhatsApp,
         });
+
         const maskedWa = input.playerWhatsApp.length > 4
           ? `****${input.playerWhatsApp.slice(-4)}`
           : "****";
