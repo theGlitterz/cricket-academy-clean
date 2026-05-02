@@ -934,23 +934,20 @@ export async function deleteFacilityAdmin(userId: number, requestingUserId: numb
   if (userId === requestingUserId) {
     throw new Error("You cannot remove your own admin account.");
   }
-  // Use Drizzle ORM — handles native enum comparison correctly
-  const deleted = await db
-    .delete(users)
-    .where(
-      and(
-        eq(users.id, userId),
-        inArray(users.role, ["facility_admin", "admin"])
-      )
-    )
-    .returning({ id: users.id });
+  // Use raw SQL with role::text cast — avoids native enum comparison issues
+  // with the postgres-js driver (same pattern as getFacilityAdmins).
+  const rows = await db.execute(
+    sql`DELETE FROM users
+        WHERE id = ${userId}
+          AND role::text IN ('facility_admin', 'admin')
+        RETURNING id`
+  );
+  const deleted = Array.isArray(rows) ? rows : Array.from(rows as Iterable<unknown>);
   console.log(`[deleteFacilityAdmin] userId=${userId} deleted=${deleted.length > 0}`);
   if (deleted.length === 0) {
     throw new Error("User not found or cannot be removed (may be a super_admin or already deleted).");
   }
 }
-
-
 
 
 
