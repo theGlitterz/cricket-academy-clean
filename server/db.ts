@@ -691,9 +691,6 @@ export async function createManualBooking(data: {
 
 /** Get a booking by its numeric id. */
 export async function getBookingById(id: number): Promise<Booking | undefined> {
-
-/** Get a booking by its numeric id. */
-export async function getBookingById(id: number): Promise<Booking | undefined> {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
