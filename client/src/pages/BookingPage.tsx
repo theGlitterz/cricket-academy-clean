@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { Link, useLocation, useParams } from "wouter";
-import { useState, useCallback, useEffect } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import {
   ArrowLeft,
   Clock,
@@ -241,15 +241,24 @@ function SlotStep({
   onSelect: (slot: { id: number; date: string; start: string; end: string; slotPrice?: number | null; slotAdvance?: number | null }) => void;
 }) {
   const today = new Date();
-  const [selectedDate, setSelectedDate] = useState(today.toISOString().slice(0, 10));
-
+  const todayStr = today.toISOString().slice(0, 10);
+  // Fetch all dates that have at least one slot in the next 90 days.
+  const { data: datesWithSlots } = trpc.slots.getDatesWithSlots.useQuery({ serviceId });
+  // Build the date list: unique sorted dates from the server, always include today.
+  const dates = useMemo(() => {
+    const set = new Set<string>(datesWithSlots ?? []);
+    set.add(todayStr);
+    return Array.from(set).sort();
+  }, [datesWithSlots, todayStr]);
+  const [selectedDate, setSelectedDate] = useState(todayStr);
+  // When the date list loads, auto-select the first date that has slots.
+  useEffect(() => {
+    if (datesWithSlots && datesWithSlots.length > 0 && !datesWithSlots.includes(selectedDate)) {
+      setSelectedDate(datesWithSlots[0]);
+    }
+  }, [datesWithSlots]);
   const { data: slots, isLoading } = trpc.slots.getAvailable.useQuery({ serviceId, date: selectedDate });
 
-  const dates = Array.from({ length: 14 }, (_, i) => {
-    const d = new Date(today);
-    d.setDate(today.getDate() + i);
-    return d.toISOString().slice(0, 10);
-  });
 
   const formatDate = (dateStr: string) => {
     const d = new Date(dateStr + "T00:00:00");
