@@ -10,6 +10,7 @@
  */
 
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
+import { GROUND_BOOKING_SLUG, GROUND_SLOTS, getGroundSlotPricing } from "../shared/groundPricing";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { nanoid } from "nanoid";
@@ -578,7 +579,12 @@ export async function createBooking(data: {
     bookingDate: slot.date,
     startTime: slot.startTime,
     endTime: slot.endTime,
-    amount: service.price,
+    amount: (() => {
+      // Use slot-level price if set; fallback to service price
+      const slotPrice = (slot as { price?: number | null }).price;
+      if (slotPrice != null && slotPrice > 0) return String(slotPrice);
+      return service.price;
+    })(),
     bookingStatus: "pending",
     paymentStatus: "pending_review",
   }).returning({ id: bookings.id });
