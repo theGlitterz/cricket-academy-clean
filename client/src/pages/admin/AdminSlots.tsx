@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import AdminLayout from "./AdminLayout";
-import { GROUND_BOOKING_SLUG, GROUND_SLOTS, getGroundSlotPricing, getDayType } from "../../../shared/groundPricing";
+import { GROUND_BOOKING_SLUG, GROUND_SLOTS, getGroundSlotPricing, getDayType } from "@/lib/groundPricing";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(t: string) {
