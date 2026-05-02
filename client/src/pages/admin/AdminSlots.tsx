@@ -619,7 +619,7 @@ export default function AdminSlots() {
                 className="rounded-xl"
               />
             </div>
-            <div className="rounded-xl bg-muted/50 px-3 py-2.5 flex items-center justify-between">
+                        <div className="rounded-xl bg-muted/50 px-3 py-2.5 flex items-center justify-between">
               <span className="text-xs text-muted-foreground">End Time (auto)</span>
               <span className="text-sm font-semibold text-foreground">
                 {formatTime(computedEndTime)}
@@ -630,6 +630,22 @@ export default function AdminSlots() {
                 )}
               </span>
             </div>
+            {/* Ground Booking: show auto-computed price/advance */}
+            {selectedService?.slug === GROUND_BOOKING_SLUG && (() => {
+              const pricing = getGroundSlotPricing(newDate, newStart);
+              if (!pricing) return (
+                <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 text-xs text-amber-800">
+                  Start time does not match a fixed Ground Booking slot (05:30, 10:00, or 14:30). Price will not be auto-assigned.
+                </div>
+              );
+              return (
+                <div className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 text-xs text-emerald-800 space-y-0.5">
+                  <p className="font-medium">Auto-pricing ({getDayType(newDate)})</p>
+                  <p>Total: ₹{pricing.price.toLocaleString("en-IN")} · Advance: ₹{pricing.advance.toLocaleString("en-IN")}</p>
+                </div>
+              );
+            })()}
+
             <div>
               <Label className="text-xs mb-1.5 block">Max Capacity</Label>
               <Input
