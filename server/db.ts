@@ -11,6 +11,7 @@
 
 import { and, desc, eq, gte, inArray, lte, sql } from "drizzle-orm";
 import { GROUND_BOOKING_SLUG, GROUND_SLOTS, getGroundSlotPricing } from "../shared/groundPricing";
+import { MANUAL_BOOKING_PREFIX } from "../shared/constants";
 import { drizzle } from "drizzle-orm/postgres-js";
 import postgres from "postgres";
 import { nanoid } from "nanoid";
@@ -596,6 +597,100 @@ export async function createBooking(data: {
 
   return { id: result[0].id, referenceId };
 }
+/**
+ * Public: get distinct dates that have at least one available or booked slot
+ * for a given service within the next N days. Used by the customer date scroller.
+ */
+export async function getDatesWithSlots(
+  serviceId: number,
+  facilityId = FACILITY_ID,
+  daysAhead = 90
+): Promise<string[]> {
+  const db = await getDb();
+  if (!db) return [];
+  const today = new Date().toISOString().slice(0, 10);
+  const future = new Date(Date.now() + daysAhead * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const rows = await db.execute(
+    sql`SELECT DISTINCT date FROM slots
+        WHERE facility_id = ${facilityId}
+          AND service_id = ${serviceId}
+          AND date >= ${today}
+          AND date <= ${future}
+          AND availability_status::text IN ('available', 'booked')
+        ORDER BY date ASC`
+  );
+  const result = Array.isArray(rows) ? rows : Array.from(rows as Iterable<unknown>);
+  return result.map((r) => (r as { date: string }).date);
+}
+
+/**
+ * Admin: create a manual (walk-in / phone) booking for an available slot.
+ *
+ * - bookingStatus = confirmed  (no review needed — admin is creating it directly)
+ * - paymentStatus = pending_review  (payment not collected via platform)
+ * - adminNote = MANUAL_BOOKING_PREFIX + optional notes
+ *
+ * TODO: Replace adminNote prefix with booking_source column post-MVP.
+ * Do NOT reference this function from Razorpay or payment verification paths.
+ */
+export async function createManualBooking(data: {
+  slotId: number;
+  serviceId: number;
+  playerName: string;
+  playerWhatsApp: string;
+  notes?: string;
+  facilityId?: number;
+  reviewedByUserId?: number;
+}): Promise<{ id: number; referenceId: string }> {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  const slot = await getSlotById(data.slotId);
+  if (!slot) throw new Error("Slot not found");
+  if (slot.availabilityStatus !== "available") {
+    throw new Error("This slot is already booked or blocked.");
+  }
+  const service = await getServiceById(data.serviceId);
+  if (!service) throw new Error("Service not found");
+  const booked = await markSlotBooked(data.slotId);
+  if (!booked) {
+    throw new Error("Slot was just taken. Please refresh and try again.");
+  }
+  const referenceId = generateReferenceId();
+  const facilityId = data.facilityId ?? FACILITY_ID;
+  const amount = (() => {
+    const slotPrice = (slot as { price?: number | null }).price;
+    if (slotPrice != null && slotPrice > 0) return String(slotPrice);
+    return service.price;
+  })();
+  // Encode manual source in adminNote using the shared constant.
+  // TODO: Replace with booking_source column post-MVP.
+  const adminNote = data.notes
+    ? `${MANUAL_BOOKING_PREFIX} ${data.notes}`
+    : `${MANUAL_BOOKING_PREFIX} Walk-in / phone booking created by admin`;
+  const result = await db.insert(bookings).values({
+    referenceId,
+    facilityId,
+    serviceId: data.serviceId,
+    slotId: data.slotId,
+    playerName: data.playerName,
+    playerWhatsApp: data.playerWhatsApp,
+    playerEmail: null,
+    bookingDate: slot.date,
+    startTime: slot.startTime,
+    endTime: slot.endTime,
+    amount,
+    bookingStatus: "confirmed",
+    paymentStatus: "pending_review",
+    adminNote,
+    reviewedAt: new Date(),
+    reviewedByUserId: data.reviewedByUserId ?? null,
+  }).returning({ id: bookings.id });
+  console.log(`[createManualBooking] referenceId=${referenceId} slotId=${data.slotId} player=${data.playerName}`);
+  return { id: result[0].id, referenceId };
+}
+
+/** Get a booking by its numeric id. */
+export async function getBookingById(id: number): Promise<Booking | undefined> {
 
 /** Get a booking by its numeric id. */
 export async function getBookingById(id: number): Promise<Booking | undefined> {
