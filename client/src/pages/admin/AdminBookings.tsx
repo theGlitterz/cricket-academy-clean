@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import AdminLayout from "./AdminLayout";
 import { StatusBadge } from "@/components/StatusBadge";
+import { isManualBooking } from "@shared/constants";
 
 // ─── Types & Helpers ──────────────────────────────────────────────────────────
 type StatusFilter = "all" | "pending" | "confirmed" | "rejected" | "cancelled";
@@ -245,10 +246,16 @@ export default function AdminBookings() {
                 <CardContent className="p-3.5">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap">
                         <p className="text-sm font-semibold text-foreground">{b.playerName}</p>
                         <StatusBadge status={b.bookingStatus as any} size="sm" />
+                        {isManualBooking(b as { adminNote?: string | null }) && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                            Manual
+                          </span>
+                        )}
                       </div>
+
                       <div className="flex items-center gap-1 mt-0.5">
                         <Phone className="w-3 h-3 text-muted-foreground" />
                         <p className="text-xs text-muted-foreground">{b.playerWhatsApp}</p>
