@@ -9,9 +9,10 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { GROUND_BOOKING_SLUG } from "@/lib/groundPricing";
 import {
   Building2, UserPlus, ShieldAlert, Loader2,
-  CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Trash2, X, Users, Pencil,
+  CheckCircle2, AlertCircle, ChevronDown, ChevronUp, Trash2, X, Users, Pencil, DollarSign,
 } from "lucide-react";
 
 function CreateFacilityForm({ onCreated }: { onCreated: () => void }) {
@@ -416,6 +417,119 @@ function FacilityAdminsPanel({ facilities }: { facilities: { id: number; facilit
     </Card>
   );
 }
+function ServicesPricingPanel({ facilities }: { facilities: { id: number; facilityName: string }[] }) {
+  const { data: allServices = [], isLoading, refetch } = trpc.superAdmin.listAllServices.useQuery();
+  const utils = trpc.useUtils();
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editPrice, setEditPrice] = useState("");
+  const [editAdvance, setEditAdvance] = useState("");
+
+  const updateMutation = trpc.superAdmin.updateServicePricing.useMutation({
+    onSuccess: () => {
+      toast.success("Pricing updated.");
+      setEditingId(null);
+      utils.superAdmin.listAllServices.invalidate();
+    },
+    onError: (e) => toast.error(e.message),
+  });
+
+  const grouped = facilities.map((f) => ({
+    facility: f,
+    services: allServices.filter((s) => s.facilityId === f.id),
+  }));
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-2">
+          <DollarSign className="w-4 h-4 text-primary" />
+          <CardTitle className="text-base">Services & Pricing</CardTitle>
+        </div>
+        <CardDescription>Manage pricing for all services across facilities. Ground Booking uses automatic day-type pricing.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="flex justify-center py-6"><Loader2 className="w-5 h-5 animate-spin text-muted-foreground" /></div>
+        ) : grouped.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-4">No facilities yet.</p>
+        ) : (
+          <div className="space-y-5">
+            {grouped.map(({ facility, services: svcList }) => (
+              <div key={facility.id}>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">{facility.facilityName}</p>
+                {svcList.length === 0 ? (
+                  <p className="text-xs text-muted-foreground pl-1">No services.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {svcList.map((svc) => {
+                      const isGround = svc.slug === GROUND_BOOKING_SLUG;
+                      const isEditing = editingId === svc.id;
+                      return (
+                        <div key={svc.id} className="rounded-xl border bg-card px-3 py-2.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium text-foreground truncate">{svc.name}</p>
+                              {isGround ? (
+                                <p className="text-[11px] text-amber-600 mt-0.5">Pricing managed by day-type matrix (code)</p>
+                              ) : (
+                                <p className="text-[11px] text-muted-foreground mt-0.5">
+                                  ₹{svc.price} total · ₹{svc.advanceAmount ?? "0"} advance
+                                </p>
+                              )}
+                            </div>
+                            {!isGround && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-7 px-2 rounded-lg text-xs"
+                                onClick={() => {
+                                  setEditingId(svc.id);
+                                  setEditPrice(svc.price);
+                                  setEditAdvance(svc.advanceAmount ?? "0");
+                                }}
+                              >
+                                <Pencil className="w-3 h-3 mr-1" />Edit
+                              </Button>
+                            )}
+                          </div>
+                          {isEditing && (
+                            <div className="mt-2.5 space-y-2 border-t pt-2.5">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-[11px] text-muted-foreground">Total Price (₹)</Label>
+                                  <Input type="number" min="0" value={editPrice} onChange={(e) => setEditPrice(e.target.value)} className="h-8 rounded-lg text-sm mt-1" />
+                                </div>
+                                <div>
+                                  <Label className="text-[11px] text-muted-foreground">Advance (₹)</Label>
+                                  <Input type="number" min="0" value={editAdvance} onChange={(e) => setEditAdvance(e.target.value)} className="h-8 rounded-lg text-sm mt-1" />
+                                </div>
+                              </div>
+                              <div className="flex gap-2">
+                                <Button size="sm" variant="outline" className="flex-1 h-7 rounded-lg text-xs" onClick={() => setEditingId(null)}>Cancel</Button>
+                                <Button
+                                  size="sm"
+                                  className="flex-1 h-7 rounded-lg text-xs"
+                                  disabled={updateMutation.isPending}
+                                  onClick={() => updateMutation.mutate({ serviceId: svc.id, price: editPrice, advanceAmount: editAdvance })}
+                                >
+                                  {updateMutation.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : "Save"}
+                                </Button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 export default function SuperAdmin() {
   const { user } = useAuth();
@@ -455,8 +569,10 @@ export default function SuperAdmin() {
           </CardContent>
         </Card>
                <FacilityAdminsPanel facilities={facilities} />
+               <ServicesPricingPanel facilities={facilities} />
         <CreateFacilityForm onCreated={handleFacilityCreated} />
         <CreateFacilityAdminForm facilities={facilities} />
+
 
       </div>
     </AdminLayout>
