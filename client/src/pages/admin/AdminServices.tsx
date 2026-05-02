@@ -61,11 +61,7 @@ function ServiceForm({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
-    const price = parseFloat(form.price);
-    const advance = parseFloat(form.advanceAmount || "0");
-    if (isNaN(price) || price < 0) { setError("Enter a valid price."); return; }
-    if (isNaN(advance) || advance < 0) { setError("Enter a valid advance amount."); return; }
-    if (advance > price) { setError("Advance amount cannot exceed the total price."); return; }
+    // Price/advance managed by super admin — no validation needed here
     if (!form.slug.trim() || !form.name.trim()) return;
     upsert.mutate({
       id: form.id,
@@ -113,18 +109,11 @@ function ServiceForm({
               onChange={(e) => set("description", e.target.value)} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1">
-              <Label htmlFor="svcPrice">Total Price (₹) *</Label>
-              <Input id="svcPrice" type="number" min="0" step="0.01" value={form.price}
-                onChange={(e) => set("price", e.target.value)} required />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="svcAdvance">Advance Amount (₹)</Label>
-              <Input id="svcAdvance" type="number" min="0" step="0.01" value={form.advanceAmount}
-                onChange={(e) => set("advanceAmount", e.target.value)} />
-            </div>
+                  {/* Price and advance are managed by super admin only — hidden from facility admin */}
+          <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+            Pricing is managed by the platform admin. Contact your platform admin to update service prices.
           </div>
+
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
