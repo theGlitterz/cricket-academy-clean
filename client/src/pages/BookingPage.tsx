@@ -54,6 +54,8 @@ interface BookingState {
   slotDate?: string;
   slotStart?: string;
   slotEnd?: string;
+  slotPrice?: string;   // slot-level total price (overrides servicePrice)
+  slotAdvance?: string; // slot-level advance (overrides serviceAdvance)
   playerName?: string;
   playerWhatsApp?: string;
   bookingId?: number;
@@ -236,7 +238,7 @@ function SlotStep({
 }: {
   serviceId: number;
   serviceName: string;
-  onSelect: (slot: { id: number; date: string; start: string; end: string }) => void;
+  onSelect: (slot: { id: number; date: string; start: string; end: string; slotPrice?: number | null; slotAdvance?: number | null }) => void;
 }) {
   const today = new Date();
   const [selectedDate, setSelectedDate] = useState(today.toISOString().slice(0, 10));
@@ -328,7 +330,14 @@ function SlotStep({
                 <button
                   key={slot.id}
                   disabled={isBooked}
-                  onClick={() => !isBooked && onSelect({ id: slot.id, date: selectedDate, start: slot.startTime, end: slot.endTime })}
+                  onClick={() => !isBooked && onSelect({
+                    id: slot.id,
+                    date: selectedDate,
+                    start: slot.startTime,
+                    end: slot.endTime,
+                    slotPrice: (slot as { price?: number | null }).price,
+                    slotAdvance: (slot as { advanceAmount?: number | null }).advanceAmount,
+                  })}
                   className={[
                     "border-2 rounded-2xl p-3.5 text-left transition-all duration-150",
                     isBooked
@@ -340,19 +349,27 @@ function SlotStep({
                     {formatTime(slot.startTime)}
                   </p>
                   <p className="text-xs text-muted-foreground mt-0.5">to {formatTime(slot.endTime)}</p>
-                  <div className="mt-2 flex items-center gap-1">
-                    {isBooked ? (
-                      <>
-                        <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
-                        <span className="text-[11px] text-red-500 font-medium">Booked</span>
-                      </>
-                    ) : (
-                      <>
-                        <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                        <span className="text-[11px] text-emerald-700 font-medium">Available</span>
-                      </>
+                    <div className="mt-2 flex items-center justify-between">
+                    <div className="flex items-center gap-1">
+                      {isBooked ? (
+                        <>
+                          <div className="w-1.5 h-1.5 rounded-full bg-red-400" />
+                          <span className="text-[11px] text-red-500 font-medium">Booked</span>
+                        </>
+                      ) : (
+                        <>
+                          <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                          <span className="text-[11px] text-emerald-700 font-medium">Available</span>
+                        </>
+                      )}
+                    </div>
+                    {!isBooked && (slot as { price?: number | null }).price != null && (
+                      <span className="text-[11px] font-bold text-foreground">
+                        ₹{((slot as { price?: number | null }).price!).toLocaleString("en-IN")}
+                      </span>
                     )}
                   </div>
+
                 </button>
               );
             })}
@@ -400,7 +417,7 @@ function DetailsStep({
     onSubmit(name.trim(), normalised);
   };
 
-  const priceNum = parseFloat(booking.servicePrice ?? "0");
+  const priceNum = parseFloat(booking.slotPrice ?? booking.servicePrice ?? "0");
 
   return (
     <div>
@@ -435,7 +452,7 @@ function DetailsStep({
               <span className="font-semibold text-foreground">₹{priceNum.toLocaleString("en-IN")}</span>
             </div>
             {(() => {
-              const advance = parseFloat(booking.serviceAdvance ?? "0");
+              const advance = parseFloat(booking.slotAdvance ?? booking.serviceAdvance ?? "0");
               const remaining = priceNum - advance;
               if (advance > 0) return (
                 <>
@@ -551,9 +568,10 @@ function PaymentStep({
     },
   });
 
-  const totalPrice = parseFloat(booking.servicePrice ?? "0");
-  const advanceAmount = parseFloat(booking.serviceAdvance ?? "0");
+  const totalPrice = parseFloat(booking.slotPrice ?? booking.servicePrice ?? "0");
+  const advanceAmount = parseFloat(booking.slotAdvance ?? booking.serviceAdvance ?? "0");
   const remainingAmount = Math.max(0, totalPrice - advanceAmount);
+
 
   const handlePayAdvance = async () => {
     if (!booking.serviceId || !booking.slotId) {
@@ -702,8 +720,8 @@ function PaymentStep({
 // ─── Step 5: Done ─────────────────────────────────────────────────────────────
 function DoneStep({ booking, facility }: { booking: BookingState; facility?: { coachWhatsApp?: string | null; facilityName?: string | null } | null }) {
   const shareText = `I've booked a ${booking.serviceName} session at BestCricketAcademy on ${booking.slotDate} at ${formatTime(booking.slotStart ?? "")}. Reference: ${booking.referenceId}`;
-  const priceNum = parseFloat(booking.servicePrice ?? "0");
-  const advanceNum = parseFloat(booking.serviceAdvance ?? "0");
+  const priceNum = parseFloat(booking.slotPrice ?? booking.servicePrice ?? "0");
+  const advanceNum = parseFloat(booking.slotAdvance ?? booking.serviceAdvance ?? "0");
   const remainingNum = priceNum - advanceNum;
   const coachWaLink = facility?.coachWhatsApp
     ? buildWhatsAppLink(
@@ -883,10 +901,19 @@ export default function BookingPage() {
           <SlotStep
             serviceId={booking.serviceId}
             serviceName={booking.serviceName ?? ""}
-            onSelect={(slot) => {
-              setBooking((prev) => ({ ...prev, slotId: slot.id, slotDate: slot.date, slotStart: slot.start, slotEnd: slot.end }));
+                     onSelect={(slot) => {
+              setBooking((prev) => ({
+                ...prev,
+                slotId: slot.id,
+                slotDate: slot.date,
+                slotStart: slot.start,
+                slotEnd: slot.end,
+                slotPrice: slot.slotPrice != null ? String(slot.slotPrice) : undefined,
+                slotAdvance: slot.slotAdvance != null ? String(slot.slotAdvance) : undefined,
+              }));
               setStep("details");
             }}
+
           />
         )}
         {step === "details" && (
