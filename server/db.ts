@@ -416,7 +416,12 @@ export async function createSlot(data: InsertSlot): Promise<number> {
     );
   }
 
-  // ── 3. Insert ──────────────────────────────────────────────────────────────
+   // ── 3. Insert ──────────────────────────────────────────────────────────────
+  console.log(
+    `[Slots] Creating slot — date=${data.date} startTime=${data.startTime} endTime=${data.endTime}` +
+    ` price=${(data as { price?: number | null }).price ?? "null"}` +
+    ` advanceAmount=${(data as { advanceAmount?: number | null }).advanceAmount ?? "null"}`
+  );
   const result = await db
     .insert(slots)
     .values({
