@@ -35,6 +35,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import AdminLayout from "./AdminLayout";
 import { StatusBadge } from "@/components/StatusBadge";
+import { isManualBooking } from "@shared/constants";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 // Status rendering is handled by the shared <StatusBadge> component.
@@ -190,8 +191,16 @@ export default function AdminBookingDetail() {
         </div>
       </div>
 
+      {/* ── Manual Booking Banner ── */}
+      {isManualBooking(booking) && (
+        <div className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2.5 mb-4 flex flex-col gap-0.5">
+          <p className="text-xs font-semibold text-amber-800">Manual Booking</p>
+          <p className="text-[11px] text-amber-700">Payment not collected via platform.</p>
+        </div>
+      )}
       {/* ── Booking Details ── */}
       <Card className="border border-border mb-4">
+
         <CardContent className="p-0 px-4">
           <DetailRow
             icon={<FileText className="w-4 h-4 text-muted-foreground" />}
@@ -240,10 +249,15 @@ export default function AdminBookingDetail() {
           {booking.adminNote && (
             <DetailRow
               icon={<FileText className="w-4 h-4 text-muted-foreground" />}
-              label="Admin Note"
-              value={booking.adminNote}
+              label={isManualBooking(booking) ? "Notes" : "Admin Note"}
+              value={
+                isManualBooking(booking)
+                  ? booking.adminNote.replace(/^\[MANUAL\]\s*/, "")
+                  : booking.adminNote
+              }
             />
           )}
+
         </CardContent>
       </Card>
 
