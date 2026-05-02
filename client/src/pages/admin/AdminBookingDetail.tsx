@@ -186,8 +186,11 @@ export default function AdminBookingDetail() {
           <p className="text-xs font-mono text-muted-foreground mt-0.5">{booking.referenceId}</p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
-          <StatusBadge status={booking.bookingStatus as any} />
-          <StatusBadge status={booking.paymentStatus as any} size="sm" />
+        <StatusBadge status={booking.bookingStatus as any} />
+          {!isManualBooking(booking) && (
+            <StatusBadge status={booking.paymentStatus as any} size="sm" />
+          )}
+
         </div>
       </div>
 
