@@ -70,7 +70,10 @@ import {
   deleteFacility,
   bulkDeleteSlots,
   deleteOpenSlotsForDate,
+  createManualBooking,
+  getDatesWithSlots,
 } from "./db";
+
 
 
 // ─── Admin guard ──────────────────────────────────────────────────────────────
@@ -479,11 +482,45 @@ const slotsRouter = router({
       return getAllSlotsForDate(input.date, resolveFacilityId(ctx.user!));
     }),
 
+   /**
+   * Public: get distinct dates that have at least one slot (available or booked)
+   * for a service within the next 90 days. Used by the customer date scroller.
+   */
+  getDatesWithSlots: publicProcedure
+    .input(z.object({ serviceId: z.number().int() }))
+    .query(async ({ input }) => {
+      return getDatesWithSlots(input.serviceId, FACILITY_ID, 90);
+    }),
   /**
-   * Admin: block or unblock a slot.
+   * Admin: create a manual (walk-in / phone) booking for an available slot.
+   * bookingStatus=confirmed, paymentStatus=pending_review, adminNote=[MANUAL]...
+   * TODO: Replace adminNote prefix with booking_source column post-MVP.
+   * Do NOT use in Razorpay or payment verification paths.
+   */
+  createManualBooking: adminProcedure
+    .input(
+      z.object({
+        slotId: z.number().int(),
+        serviceId: z.number().int(),
+        playerName: z.string().min(2).max(100),
+        playerWhatsApp: z.string().min(7).max(20),
+        notes: z.string().max(500).optional(),
+      })
+    )
+    .mutation(async ({ input, ctx }) => {
+      const facilityId = resolveFacilityId(ctx.user!);
+      const result = await createManualBooking({
+        ...input,
+        facilityId,
+        reviewedByUserId: ctx.user!.id,
+      });
+      return result;
+    }),
+  /** Admin: block or unblock a slot.
    * Blocked slots cannot be booked.
    */
   setBlocked: adminProcedure
+
     .input(z.object({ id: z.number().int(), blocked: z.boolean() }))
     .mutation(async ({ input }) => {
       await setSlotBlockStatus(input.id, input.blocked);
