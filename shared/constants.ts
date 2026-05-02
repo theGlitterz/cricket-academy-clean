@@ -117,3 +117,24 @@ export const WHATSAPP_ENABLED = false; // Set to true when API is configured
  * reference — players are instructed to include it in the UPI remarks.
  */
 export const PAYMENT_AUTOMATION_ENABLED = false; // Set to true when integrated
+
+// ─── Manual Booking (MVP) ─────────────────────────────────────────────────────
+/**
+ * TODO: Replace adminNote prefix with a dedicated `booking_source` column post-MVP.
+ *       See: https://github.com/your-repo/issues — add `booking_source` enum to bookings table.
+ *
+ * MVP approach: manual bookings are identified by this prefix in adminNote.
+ * Do NOT use this prefix in Razorpay or any payment verification logic.
+ */
+export const MANUAL_BOOKING_PREFIX = "[MANUAL]";
+
+/**
+ * Returns true if the booking was created manually by an admin
+ * (walk-in / phone booking, payment not collected via platform ).
+ *
+ * @param booking - any object with an optional adminNote string field
+ */
+export function isManualBooking(booking: { adminNote?: string | null }): boolean {
+  return typeof booking.adminNote === "string" &&
+    booking.adminNote.startsWith(MANUAL_BOOKING_PREFIX);
+}
