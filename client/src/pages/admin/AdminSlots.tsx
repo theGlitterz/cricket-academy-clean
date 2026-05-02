@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import AdminLayout from "./AdminLayout";
+import { GROUND_BOOKING_SLUG, GROUND_SLOTS, getGroundSlotPricing, getDayType } from "../../../shared/groundPricing";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function formatTime(t: string) {
@@ -459,8 +460,7 @@ export default function AdminSlots() {
                       }}
                     />
                   )}
-                  <div className="flex-1 min-w-0">
-
+                    <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-sm font-semibold text-foreground">
                         {formatTime(slot.startTime)} – {formatTime(slot.endTime)}
@@ -472,7 +472,16 @@ export default function AdminSlots() {
                     <p className="text-xs text-muted-foreground mt-0.5">
                       {svc?.name ?? "Unknown service"}
                     </p>
+                    {/* Slot-level pricing (shown when stored on the slot) */}
+                    {(slot as { price?: number | null }).price != null && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5">
+                        ₹{((slot as { price?: number | null }).price!).toLocaleString("en-IN")} total
+                        {" · "}
+                        ₹{((slot as { advanceAmount?: number | null }).advanceAmount ?? 0).toLocaleString("en-IN")} advance
+                      </p>
+                    )}
                   </div>
+
                   <div className="flex items-center gap-1.5 shrink-0">
                     {!isBooked && (
                       <button
@@ -704,13 +713,46 @@ export default function AdminSlots() {
                 />
               </div>
             </div>
-            {bulkServiceId && (
-              <div className="rounded-xl bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground space-y-1">
-                <p><span className="font-medium text-foreground">{bulkTimeSlots.length} slots/day</span> × {bulkDayCount} days = <span className="font-medium text-foreground">{bulkTimeSlots.length * bulkDayCount} total slots</span></p>
-                <p>Times: {bulkTimeSlots.slice(0, 3).map(t => formatTime(t.startTime)).join(", ")}{bulkTimeSlots.length > 3 ? ` +${bulkTimeSlots.length - 3} more` : ""}</p>
-                <p>Duration: {bulkService?.durationMinutes} min per slot</p>
-              </div>
-            )}
+              {bulkServiceId && (() => {
+              const isGround = bulkService?.slug === GROUND_BOOKING_SLUG;
+              if (isGround) {
+                // Show per-slot pricing preview for the first selected date
+                const previewDate = bulkFromDate;
+                const dayType = getDayType(previewDate);
+                const dayLabel = dayType === "sunday" ? "Sunday" : dayType === "saturday" ? "Saturday" : "Weekday";
+                return (
+                  <div className="rounded-xl bg-muted/50 px-3 py-2.5 text-xs space-y-2">
+                    <p className="text-muted-foreground">
+                      <span className="font-medium text-foreground">3 fixed slots/day</span> × {bulkDayCount} days = <span className="font-medium text-foreground">{3 * bulkDayCount} total slots</span>
+                    </p>
+                    <p className="text-muted-foreground font-medium">Preview for {dayLabel} ({previewDate}):</p>
+                    <div className="space-y-1">
+                      {GROUND_SLOTS.map((s) => {
+                        const pricing = getGroundSlotPricing(previewDate, s.startTime)!;
+                        return (
+                          <div key={s.startTime} className="flex justify-between items-center">
+                            <span className="text-foreground">{formatTime(s.startTime)} – {formatTime(s.endTime)}</span>
+                            <span className="text-foreground font-medium">
+                              ₹{pricing.price.toLocaleString("en-IN")}
+                              <span className="text-muted-foreground font-normal"> · ₹{pricing.advance.toLocaleString("en-IN")} adv</span>
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <p className="text-muted-foreground text-[10px]">Pricing varies by day type. Weekday/Saturday/Sunday rates apply automatically.</p>
+                  </div>
+                );
+              }
+              return (
+                <div className="rounded-xl bg-muted/50 px-3 py-2.5 text-xs text-muted-foreground space-y-1">
+                  <p><span className="font-medium text-foreground">{bulkTimeSlots.length} slots/day</span> × {bulkDayCount} days = <span className="font-medium text-foreground">{bulkTimeSlots.length * bulkDayCount} total slots</span></p>
+                  <p>Times: {bulkTimeSlots.slice(0, 3).map(t => formatTime(t.startTime)).join(", ")}{bulkTimeSlots.length > 3 ? ` +${bulkTimeSlots.length - 3} more` : ""}</p>
+                  <p>Duration: {bulkService?.durationMinutes} min per slot</p>
+                </div>
+              );
+            })()}
+
           </div>
           <DialogFooter className="flex gap-2">
             <Button variant="outline" className="flex-1" onClick={() => setBulkOpen(false)}>
@@ -724,7 +766,9 @@ export default function AdminSlots() {
               {createBulkMutation.isPending ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
               ) : (
-                `Create ${bulkTimeSlots.length * bulkDayCount} Slots`
+                bulkService?.slug === GROUND_BOOKING_SLUG
+                  ? `Create ${3 * bulkDayCount} Slots`
+                  : `Create ${bulkTimeSlots.length * bulkDayCount} Slots`
               )}
             </Button>
           </DialogFooter>
