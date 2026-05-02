@@ -153,6 +153,10 @@ export const slots = pgTable("slots", {
   maxCapacity: integer("max_capacity").notNull().default(1),
   /** Current booking count (pending + confirmed) */
   bookedCount: integer("booked_count").notNull().default(0),
+  /** Slot-level total price in INR (overrides service price when set) */
+  price: integer("price"),
+  /** Slot-level advance amount in INR (overrides service advanceAmount when set) */
+  advanceAmount: integer("advance_amount"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
