@@ -4,17 +4,17 @@
  */
 import { useState, useMemo, useEffect } from "react";
 import { trpc } from "@/lib/trpc";
+import { isManualBooking } from "@shared/constants";
 import { toast } from "sonner";
 import {
   Plus,
-  Lock,
-  Unlock,
   Trash2,
   Loader2,
   ChevronLeft,
   ChevronRight,
   CalendarDays,
   Layers,
+  UserPlus,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -193,6 +194,25 @@ export default function AdminSlots() {
     },
     onError: (e) => toast.error(e.message),
   });
+  // ── Manual booking modal ────────────────────────────────────────────────────
+  const [manualBookingSlot, setManualBookingSlot] = useState<{
+    id: number; serviceId: number; startTime: string; endTime: string;
+  } | null>(null);
+  const [manualForm, setManualForm] = useState({ playerName: "", playerWhatsApp: "", notes: "" });
+  const [manualError, setManualError] = useState("");
+  const createManualMutation = trpc.slots.createManualBooking.useMutation({
+    onSuccess: (data) => {
+      toast.success(`Manual booking created — Ref: ${data.referenceId}`);
+      setManualBookingSlot(null);
+      setManualForm({ playerName: "", playerWhatsApp: "", notes: "" });
+      setManualError("");
+      utils.slots.getByDate.invalidate();
+    },
+    onError: (e) => {
+      setManualError(e.message);
+    },
+  });
+
 
   const setBlockedMutation = trpc.slots.setBlocked.useMutation({
     onSuccess: (_, vars) => {
@@ -483,26 +503,25 @@ export default function AdminSlots() {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    {!isBooked && (
+                    {!isBooked && !isBlocked && (
                       <button
-                        onClick={() =>
-                          setBlockedMutation.mutate({ id: slot.id, blocked: !isBlocked })
-                        }
-                        disabled={setBlockedMutation.isPending}
-                        className={`w-8 h-8 flex items-center justify-center rounded-lg border transition-colors ${
-                          isBlocked
-                            ? "border-green-200 hover:bg-green-50"
-                            : "border-border hover:bg-muted"
-                        }`}
-                        title={isBlocked ? "Unblock slot" : "Block slot"}
+                        onClick={() => {
+                          setManualError("");
+                          setManualForm({ playerName: "", playerWhatsApp: "", notes: "" });
+                          setManualBookingSlot({
+                            id: slot.id,
+                            serviceId: slot.serviceId,
+                            startTime: slot.startTime,
+                            endTime: slot.endTime,
+                          });
+                        }}
+                        className="w-8 h-8 flex items-center justify-center rounded-lg border border-border hover:bg-muted transition-colors"
+                        title="Add manual booking"
                       >
-                        {isBlocked ? (
-                          <Unlock className="w-3.5 h-3.5 text-green-600" />
-                        ) : (
-                          <Lock className="w-3.5 h-3.5 text-muted-foreground" />
-                        )}
+                        <UserPlus className="w-3.5 h-3.5 text-muted-foreground" />
                       </button>
                     )}
+
                     {!isBooked && (
                       <button
                         onClick={() => {
@@ -520,6 +539,7 @@ export default function AdminSlots() {
                     {isBooked && (
                       <span className="text-[10px] text-blue-600 font-medium px-2">Booked</span>
                     )}
+
                   </div>
                 </CardContent>
               </Card>
@@ -819,8 +839,85 @@ export default function AdminSlots() {
             </Button>
           </DialogFooter>
         </DialogContent>
-      </Dialog>
+           </Dialog>
 
+      {/* ── Manual Booking Modal ── */}
+      <Dialog open={!!manualBookingSlot} onOpenChange={(open) => { if (!open) setManualBookingSlot(null); }}>
+        <DialogContent className="max-w-sm rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold">Add Manual Booking</DialogTitle>
+          </DialogHeader>
+          {manualBookingSlot && (
+            <div className="space-y-3 py-1">
+              <div className="rounded-xl bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                Slot: {formatTime(manualBookingSlot.startTime)} – {formatTime(manualBookingSlot.endTime)}
+              </div>
+              {manualError && (
+                <p className="text-xs text-red-500 rounded-lg bg-red-50 px-3 py-2">{manualError}</p>
+              )}
+              <div className="space-y-1">
+                <Label className="text-xs">Player Name *</Label>
+                <Input
+                  placeholder="e.g. Rahul Sharma"
+                  value={manualForm.playerName}
+                  onChange={(e) => setManualForm((f) => ({ ...f, playerName: e.target.value }))}
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Player Phone *</Label>
+                <Input
+                  placeholder="+919876543210"
+                  value={manualForm.playerWhatsApp}
+                  onChange={(e) => setManualForm((f) => ({ ...f, playerWhatsApp: e.target.value }))}
+                  className="rounded-xl"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Notes (optional)</Label>
+                <Textarea
+                  placeholder="e.g. Walk-in, paid cash ₹3500"
+                  value={manualForm.notes}
+                  onChange={(e) => setManualForm((f) => ({ ...f, notes: e.target.value }))}
+                  className="rounded-xl text-sm resize-none"
+                  rows={2}
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
+            <Button variant="outline" className="flex-1 rounded-xl" onClick={() => setManualBookingSlot(null)}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 rounded-xl"
+              disabled={
+                createManualMutation.isPending ||
+                !manualForm.playerName.trim() ||
+                !manualForm.playerWhatsApp.trim()
+              }
+              onClick={() => {
+                if (!manualBookingSlot) return;
+                setManualError("");
+                createManualMutation.mutate({
+                  slotId: manualBookingSlot.id,
+                  serviceId: manualBookingSlot.serviceId,
+                  playerName: manualForm.playerName.trim(),
+                  playerWhatsApp: manualForm.playerWhatsApp.trim(),
+                  notes: manualForm.notes.trim() || undefined,
+                });
+              }}
+            >
+              {createManualMutation.isPending ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                "Confirm Booking"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AdminLayout>
   );
 }
+
