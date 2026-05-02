@@ -11,6 +11,7 @@
  */
 
 import { TRPCError } from "@trpc/server";
+import { eq } from "drizzle-orm";
 import { z } from "zod";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -36,7 +37,9 @@ import {
 import bcrypt from "bcryptjs";
 import Razorpay from "razorpay";
 import { GROUND_BOOKING_SLUG, GROUND_SLOTS, getGroundSlotPricing } from "../shared/groundPricing";
+import { services } from "../drizzle/schema";
 import {
+  getDb,
   FACILITY_ID,
   cancelBooking,
   confirmBooking,
@@ -327,24 +330,25 @@ const servicesRouter = router({
         sortOrder: z.number().int().default(0),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+       .mutation(async ({ input, ctx }) => {
       const facilityId = resolveFacilityId(ctx.user!);
-      const price = parseFloat(input.price);
-      const advance = parseFloat(input.advanceAmount);
-      if (advance > price) {
-        throw new TRPCError({
-          code: "BAD_REQUEST",
-          message: "Advance amount cannot exceed the total price.",
-        });
+      const isSuperAdmin = ctx.user!.role === "super_admin";
+      // Only super_admin may set price/advance — facility_admin/admin changes are ignored
+      const price = isSuperAdmin ? input.price : undefined;
+      const advanceAmount = isSuperAdmin ? input.advanceAmount : undefined;
+      if (price !== undefined && advanceAmount !== undefined) {
+        const p = parseFloat(price);
+        const a = parseFloat(advanceAmount);
+        if (a > p) throw new TRPCError({ code: "BAD_REQUEST", message: "Advance amount cannot exceed the total price." });
       }
       await upsertService({
         ...input,
         facilityId,
-        price: input.price,
-        advanceAmount: input.advanceAmount,
+        ...(price !== undefined ? { price, advanceAmount: advanceAmount ?? "0" } : {}),
       });
       return { success: true };
     }),
+
 });
 
 // ─── Slots router ─────────────────────────────────────────────────────────────
@@ -393,9 +397,25 @@ const slotsRouter = router({
       })
     )
     .mutation(async ({ input, ctx }) => {
-      const id = await createSlot({ ...input, facilityId: resolveFacilityId(ctx.user!) });
+      const service = await getServiceById(input.serviceId);
+      const isGround = service?.slug === GROUND_BOOKING_SLUG;
+      let slotPrice: number | undefined;
+      let slotAdvance: number | undefined;
+      if (isGround) {
+        const pricing = getGroundSlotPricing(input.date, input.startTime);
+        if (pricing) {
+          slotPrice = pricing.price;
+          slotAdvance = pricing.advance;
+        }
+      }
+      const id = await createSlot({
+        ...input,
+        facilityId: resolveFacilityId(ctx.user!),
+        ...(slotPrice != null ? { price: slotPrice, advanceAmount: slotAdvance } : {}),
+      });
       return { id };
     }),
+
 
   /**
    * Admin: bulk create slots for a date range.
@@ -940,7 +960,46 @@ const paymentsRouter = router({
 // ─── Super Admin router ───────────────────────────────────────────────────────
 
 const superAdminRouter = router({
+  /** Super admin: list all services across all facilities */
+  listAllServices: superAdminProcedure.query(async () => {
+    const db = await getDb();
+    if (!db) return [];
+    const rows = await db
+      .select({
+        id: services.id,
+        facilityId: services.facilityId,
+        slug: services.slug,
+        name: services.name,
+        price: services.price,
+        advanceAmount: services.advanceAmount,
+        activeStatus: services.activeStatus,
+      })
+      .from(services)
+      .orderBy(services.facilityId, services.sortOrder);
+    return rows;
+  }),
+  /** Super admin: update price and advance for any service */
+  updateServicePricing: superAdminProcedure
+    .input(
+      z.object({
+        serviceId: z.number().int(),
+        price: z.string(),
+        advanceAmount: z.string().default("0"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      const db = await getDb();
+      if (!db) throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "DB unavailable" });
+      const price = parseFloat(input.price);
+      const advance = parseFloat(input.advanceAmount);
+      if (isNaN(price) || price < 0) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid price." });
+      if (isNaN(advance) || advance < 0 || advance > price) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid advance amount." });
+      await db.update(services).set({ price: input.price, advanceAmount: input.advanceAmount, updatedAt: new Date() }).where(eq(services.id, input.serviceId));
+      console.log(`[superAdmin] Updated pricing for serviceId=${input.serviceId} price=${input.price} advance=${input.advanceAmount}`);
+      return { success: true };
+    }),
   createFacilityAdmin: superAdminProcedure
+
     .input(
       z.object({
         email: z.string().email(),
