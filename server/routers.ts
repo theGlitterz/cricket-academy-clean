@@ -35,6 +35,7 @@ import {
 } from "./db";
 import bcrypt from "bcryptjs";
 import Razorpay from "razorpay";
+import { GROUND_BOOKING_SLUG, GROUND_SLOTS, getGroundSlotPricing } from "../shared/groundPricing";
 import {
   FACILITY_ID,
   cancelBooking,
@@ -415,15 +416,23 @@ const slotsRouter = router({
         maxCapacity: z.number().int().min(1).default(1),
       })
     )
-    .mutation(async ({ input, ctx }) => {
+       .mutation(async ({ input, ctx }) => {
       const fid = resolveFacilityId(ctx.user!);
+      const service = await getServiceById(input.serviceId);
+      const isGround = service?.slug === GROUND_BOOKING_SLUG;
       const from = new Date(input.fromDate);
       const to = new Date(input.toDate);
       let created = 0;
-
       for (let d = new Date(from); d <= to; d.setDate(d.getDate() + 1)) {
         const date = d.toISOString().slice(0, 10);
-        for (const ts of input.timeSlots) {
+        // For Ground Booking: ignore timeSlots input, use fixed schedule with day-based pricing
+        const slotsToCreate = isGround
+          ? GROUND_SLOTS.map((s) => {
+              const pricing = getGroundSlotPricing(date, s.startTime)!;
+              return { startTime: s.startTime, endTime: s.endTime, price: pricing.price, advance: pricing.advance };
+            })
+          : input.timeSlots.map((s) => ({ ...s, price: undefined, advance: undefined }));
+        for (const ts of slotsToCreate) {
           try {
             await createSlot({
               facilityId: fid,
@@ -432,6 +441,7 @@ const slotsRouter = router({
               startTime: ts.startTime,
               endTime: ts.endTime,
               maxCapacity: input.maxCapacity,
+              ...(ts.price != null ? { price: ts.price, advanceAmount: ts.advance } : {}),
             });
             created++;
           } catch {
@@ -773,8 +783,21 @@ const paymentsRouter = router({
         throw new TRPCError({ code: "CONFLICT", message: "This slot is no longer available." });
       }
 
-      const advanceRaw = (service as { advanceAmount?: string | null }).advanceAmount;
-      const advanceInr = advanceRaw && Number(advanceRaw) > 0 ? Number(advanceRaw) : Number(service.price);
+      // Use slot-level advance if stored; fallback to service advanceAmount; fallback to full price
+      const slotAdvance = (slot as { advanceAmount?: number | null }).advanceAmount;
+      const slotPrice = (slot as { price?: number | null }).price;
+      let advanceInr: number;
+      if (slotAdvance != null && slotAdvance > 0) {
+        advanceInr = slotAdvance;
+      } else if (slotPrice != null && slotPrice > 0) {
+        // Slot has a price but no advance stored — compute 10%
+        advanceInr = Math.round(slotPrice * 0.1);
+      } else {
+        const advanceRaw = (service as { advanceAmount?: string | null }).advanceAmount;
+        advanceInr = advanceRaw && Number(advanceRaw) > 0 ? Number(advanceRaw) : Number(service.price);
+      }
+      console.log(`[createOrder] slotId=${input.slotId} slotPrice=${slotPrice ?? "null"} slotAdvance=${slotAdvance ?? "null"} advanceInr=${advanceInr}`);
+
       const amountPaise = Math.round(advanceInr * 100);
 
       if (amountPaise <= 0) {
