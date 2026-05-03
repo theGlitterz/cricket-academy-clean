@@ -309,9 +309,9 @@ const facilityRouter = router({
 
 const servicesRouter = router({
   /** Public: list active services with price and duration */
-  list: publicProcedure.query(async ({ ctx }) => {
-  return getServicesWithMinPrice(FACILITY_ID);
-}),
+   list: publicProcedure.query(async () => {
+    return getActiveServicesWithMinPrice(FACILITY_ID);
+  }),
 
 
   /** Admin: list all services including inactive — scoped to user's facility */
