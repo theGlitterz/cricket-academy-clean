@@ -157,6 +157,36 @@ export async function getAllServices(facilityId = FACILITY_ID): Promise<Service[
     .where(eq(services.facilityId, facilityId))
     .orderBy(services.sortOrder);
 }
+/**
+ * Returns services with an additional `minSlotPrice` field —
+ * the lowest price among all currently available slots for that service.
+ * Returns null if no available slots exist (falls back to service.price in UI).
+ */
+export async function getAllServicesWithMinPrice(facilityId = FACILITY_ID) {
+  const db = await getDb();
+  if (!db) return [];
+  const svcs = await getAllServices(facilityId);
+  const today = new Date().toISOString().slice(0, 10);
+  const mins = await db.execute(
+    sql`SELECT service_id, MIN(price::numeric) AS min_price
+        FROM slots
+        WHERE facility_id = ${facilityId}
+          AND date >= ${today}
+          AND availability_status = 'available'
+          AND price IS NOT NULL
+        GROUP BY service_id`
+  );
+  const rows = Array.isArray(mins) ? mins : Array.from(mins as Iterable<unknown>);
+  const minMap = new Map<number, number>();
+  for (const r of rows) {
+    const row = r as { service_id: number; min_price: string };
+    minMap.set(row.service_id, parseFloat(row.min_price));
+  }
+  return svcs.map((s) => ({
+    ...s,
+    minSlotPrice: minMap.get(s.id) ?? null,
+  }));
+}
 
 /** Get a single service by slug. */
 export async function getServiceBySlug(slug: string): Promise<Service | undefined> {
