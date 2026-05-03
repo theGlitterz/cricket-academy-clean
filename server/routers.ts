@@ -50,6 +50,7 @@ import {
   getAllSlotsForDate,
   getAllServices,
   getActiveServices,
+  getActiveServicesWithMinPrice,
   getAvailableSlots,
   getAllSlotsForServiceAndDate,
   getBookingByReference,
