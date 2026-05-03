@@ -165,7 +165,7 @@ export async function getAllServices(facilityId = FACILITY_ID): Promise<Service[
 export async function getAllServicesWithMinPrice(facilityId = FACILITY_ID) {
   const db = await getDb();
   if (!db) return [];
-  const svcs = await getAllServices(facilityId);
+  const svcs = await getActiveServices(facilityId);
   const today = new Date().toISOString().slice(0, 10);
   const mins = await db.execute(
     sql`SELECT service_id, MIN(price::numeric) AS min_price
