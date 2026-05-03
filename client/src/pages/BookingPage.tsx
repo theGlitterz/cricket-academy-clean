@@ -211,7 +211,14 @@ function ServiceStep({
                     )}
                     <div className="flex items-center gap-3 mt-1.5">
                       <span className="text-sm font-bold" style={{ color }}>
-                        ₹{priceNum.toLocaleString("en-IN")}
+                        {(service as { minSlotPrice?: number | null }).minSlotPrice != null ? (
+                          <>
+                            <span className="text-xs font-normal text-muted-foreground">From </span>
+                            ₹{Number((service as { minSlotPrice?: number | null }).minSlotPrice).toLocaleString("en-IN")}
+                          </>
+                        ) : (
+                          <>₹{priceNum.toLocaleString("en-IN")}</>
+                        )}
                         <span className="text-xs font-normal text-muted-foreground"> / slot</span>
                       </span>
                       <span className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -219,6 +226,7 @@ function ServiceStep({
                         {service.durationMinutes} min
                       </span>
                     </div>
+
                   </div>
                 </div>
               </button>
