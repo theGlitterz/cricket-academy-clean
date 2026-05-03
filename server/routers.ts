@@ -50,7 +50,6 @@ import {
   getAllSlotsForDate,
   getAllServices,
   getActiveServices,
-  getActiveServicesWithMinPrice,
   getAvailableSlots,
   getAllSlotsForServiceAndDate,
   getBookingByReference,
@@ -309,9 +308,8 @@ const facilityRouter = router({
 // ─── Services router ──────────────────────────────────────────────────────────
 
 const servicesRouter = router({
-  /** Public: list active services with price and duration */
-    list: publicProcedure.query(async () => {
-    return getAllServicesWithMinPrice(FACILITY_ID);
+   list: publicProcedure.query(async () => {
+    return getActiveServices(FACILITY_ID);
   }),
 
 
